@@ -1,4 +1,4 @@
-import { ScanJob, MovieFile, PlaybackSettings } from './types';
+import { ScanJob, MovieFile, PlaybackSettings, LibraryFolder, DuplicateGroup, SearchMediaRequest, MediaSearchResult } from './types';
 
 export interface IElectronAPI {
   fileScanner: {
@@ -17,6 +17,17 @@ export interface IElectronAPI {
   settings: {
     getPlaybackSettings: () => Promise<PlaybackSettings>;
     savePlaybackSettings: (settings: PlaybackSettings) => Promise<void>;
+    saveSetting: (key: string, value: string) => Promise<void>;
+    getSetting: (key: string) => Promise<string | null>;
+  };
+  library: {
+    getFolders: () => Promise<LibraryFolder[]>;
+    addFolder: () => Promise<LibraryFolder[] | null>;
+    removeFolder: (folderId: string, deleteFiles: boolean) => Promise<LibraryFolder[]>;
+    rescanFolder: (folderId: string) => Promise<{ new: number; updated: number; removed: number }>;
+    getDuplicates: () => Promise<DuplicateGroup[]>;
+    removeFile: (fileId: string) => Promise<void>;
+    searchMedia: (payload: SearchMediaRequest) => Promise<MediaSearchResult[]>;
   };
   deleteFile: (filePath: string) => Promise<boolean>;
   db: {
@@ -25,6 +36,7 @@ export interface IElectronAPI {
     hideFile(id: string): Promise<void>;
     toggleFavorite(id: string): Promise<void>;
   };
+  onScanProgress: (callback: (event: any, payload: any) => void) => () => void;
   ping: () => void;
 }
 

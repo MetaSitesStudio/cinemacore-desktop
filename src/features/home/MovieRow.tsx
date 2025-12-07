@@ -44,13 +44,14 @@ export const MovieRow: React.FC<MovieRowProps> = ({ title, movies, onMovieClick,
           className="flex gap-4 overflow-x-auto no-scrollbar scroll-smooth pb-4"
         >
           {movies.map((movie) => (
-            <MovieCard 
-              key={movie.id} 
-              movie={movie} 
-              onClick={onMovieClick} 
-              onEdit={onEdit}
-              onDelete={onDelete}
-            />
+            <div key={movie.id} className="min-w-[200px] w-[200px] md:min-w-[240px] md:w-[240px]">
+              <MovieCard 
+                movie={movie} 
+                onClick={onMovieClick} 
+                onEdit={onEdit}
+                onDelete={onDelete}
+              />
+            </div>
           ))}
         </div>
 

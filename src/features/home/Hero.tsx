@@ -22,15 +22,31 @@ export const Hero: React.FC<HeroProps> = ({ movie, onDetailsClick }) => {
     }
   };
 
+  console.log('[IMG] Hero movie artwork', {
+    title: movie.title,
+    posterUrl: movie.posterUrl,
+    tmdbPosterUrl: movie.tmdbPosterUrl,
+    tmdbBackdropUrl: movie.tmdbBackdropUrl,
+  });
+
+  const bg = movie.tmdbBackdropUrl
+    || movie.backdropUrl
+    || movie.tmdbPosterUrl
+    || movie.posterUrl
+    || null;
+
   return (
     <div className="relative h-[85vh] w-full">
       {/* Background Image */}
       <div className="absolute inset-0">
-        <img 
-          src={movie.backdropUrl} 
-          alt={movie.title} 
-          className="w-full h-full object-cover"
-        />
+        {bg ? (
+          <div 
+            className="w-full h-full bg-cover bg-center transition-opacity duration-700"
+            style={{ backgroundImage: `url(${bg})` }}
+          />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-primary/20 to-background" />
+        )}
         <div className="absolute inset-0 bg-gradient-to-r from-background via-background/50 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
       </div>

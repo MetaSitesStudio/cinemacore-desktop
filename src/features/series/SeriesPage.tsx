@@ -3,7 +3,6 @@ import { useServices } from '@/services/ServiceContext';
 import { Series, MovieFile } from '@/types';
 import { SeriesCard } from './SeriesCard';
 import { SeriesDetailOverlay } from './SeriesDetailOverlay';
-import { Button } from '@/components/ui/Button';
 import { ManualMetadataEditor } from '@/features/settings/ManualMetadataEditor';
 import { DeleteConfirmationDialog } from '@/components/dialogs/DeleteConfirmationDialog';
 
@@ -47,13 +46,17 @@ export const SeriesPage: React.FC = () => {
       // Use metadata from the first file that has it, or fallback
       const metaFile = files.find(f => f.metadata) || files[0];
       
+      // Find best artwork across all files
+      const fileWithPoster = files.find(f => f.tmdbPosterUrl);
+      const fileWithBackdrop = files.find(f => f.tmdbBackdropUrl);
+      
       return {
         id: title, // Use title as ID for grouping for now
         title: title,
         year: metaFile.metadata?.year || metaFile.guessedYear || 0,
         description: metaFile.metadata?.plot || `${files.length} episodes available`,
-        posterUrl: metaFile.metadata?.posterUrl || '',
-        backdropUrl: '', // We don't have backdrops yet
+        posterUrl: fileWithPoster?.tmdbPosterUrl || metaFile.metadata?.posterUrl || '',
+        backdropUrl: fileWithBackdrop?.tmdbBackdropUrl || '',
         rating: parseFloat(metaFile.metadata?.rating || '0') || 0,
         seasons: new Set(files.map(f => f.seasonNumber).filter(Boolean)).size,
         genres: metaFile.metadata?.genres || [],
@@ -146,33 +149,47 @@ export const SeriesPage: React.FC = () => {
     return metaFile?.metadata || null;
   }, [selectedEpisodes]);
 
+  const selectedSeriesPosterUrl = useMemo(() => {
+    if (!selectedEpisodes.length) return undefined;
+    const fileWithTmdb = selectedEpisodes.find(f => f.tmdbPosterUrl);
+    return fileWithTmdb?.tmdbPosterUrl || selectedSeriesMetadata?.posterUrl || undefined;
+  }, [selectedEpisodes, selectedSeriesMetadata]);
+
   return (
-    <div className="pt-24 px-4 md:px-12 min-h-screen bg-background text-text">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-4xl font-bold">TV Series</h1>
-        <div className="flex gap-4">
+    <div className="pt-24 px-6 md:px-12 min-h-screen bg-background text-text">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
+        <div>
+          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
+            TV Series
+          </h1>
+          <p className="text-text/60 mt-2 text-lg">
+            {seriesList.length} {seriesList.length === 1 ? 'Series' : 'Series'} in your library
+          </p>
+        </div>
+        
+        <div className="flex items-center gap-4 bg-surface/50 p-1.5 rounded-lg backdrop-blur-sm border border-white/5">
           <select 
-            className="bg-surface text-text border border-text/20 rounded px-3 py-1.5"
+            className="bg-transparent text-text/80 border-none outline-none px-3 py-1.5 text-sm font-medium cursor-pointer hover:text-primary transition-colors"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as 'year' | 'title')}
           >
-            <option value="year">Sort by Year</option>
-            <option value="title">Sort by Title</option>
+            <option value="year" className="bg-surface text-text">Sort by Year</option>
+            <option value="title" className="bg-surface text-text">Sort by Title</option>
           </select>
-          <Button variant="secondary" size="sm">Filter</Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+      {/* Grid Layout */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-6 md:gap-8 pb-20">
         {sortedSeries.map(series => (
-          <div key={series.id} className="flex justify-center">
-            <SeriesCard 
-              series={series} 
-              onClick={setSelectedSeries} 
-              onDelete={handleDeleteSeries}
-              onEdit={handleEditSeries}
-            />
-          </div>
+          <SeriesCard 
+            key={series.id}
+            series={series} 
+            onClick={setSelectedSeries} 
+            onDelete={handleDeleteSeries}
+            onEdit={handleEditSeries}
+          />
         ))}
       </div>
 
@@ -182,6 +199,7 @@ export const SeriesPage: React.FC = () => {
         seriesTitle={selectedSeries?.title || ''}
         episodes={selectedEpisodes}
         seriesMetadata={selectedSeriesMetadata}
+        posterUrl={selectedSeriesPosterUrl}
         onDeleteEpisode={handleDeleteEpisode}
         onEditEpisode={handleEditEpisode}
         onDeleteSeries={() => selectedSeries && handleDeleteSeries(selectedSeries)}

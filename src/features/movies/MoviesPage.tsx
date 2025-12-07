@@ -3,7 +3,6 @@ import { useServices } from '@/services/ServiceContext';
 import { Movie, MovieFile } from '@/types';
 import { MovieCard } from '@/features/home/MovieCard';
 import { MovieDetailOverlay } from '@/features/details/MovieDetailOverlay';
-import { Button } from '@/components/ui/Button';
 import { ManualMetadataEditor } from '@/features/settings/ManualMetadataEditor';
 import { DeleteConfirmationDialog } from '@/components/dialogs/DeleteConfirmationDialog';
 
@@ -34,8 +33,8 @@ export const MoviesPage: React.FC = () => {
       title: f.metadata?.title || f.guessedTitle || f.fileName,
       year: f.metadata?.year || f.guessedYear || 0,
       description: f.metadata?.plot || '',
-      posterUrl: f.metadata?.posterUrl || '',
-      backdropUrl: '', // We don't have backdrops yet
+      posterUrl: f.tmdbPosterUrl || f.metadata?.posterUrl || '',
+      backdropUrl: f.tmdbBackdropUrl || '',
       rating: parseFloat(f.metadata?.rating || '0') || 0,
       runtime: f.metadata?.runtimeMinutes || 0,
       genres: f.metadata?.genres || [],
@@ -93,32 +92,40 @@ export const MoviesPage: React.FC = () => {
   });
 
   return (
-    <div className="pt-24 px-4 md:px-12 min-h-screen bg-background text-text">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-4xl font-bold">Movies</h1>
-        <div className="flex gap-4">
+    <div className="pt-24 px-6 md:px-12 min-h-screen bg-background text-text">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
+        <div>
+          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-primary to-blue-500 bg-clip-text text-transparent">
+            Movies
+          </h1>
+          <p className="text-text/60 mt-2 text-lg">
+            {movies.length} {movies.length === 1 ? 'Movie' : 'Movies'} in your library
+          </p>
+        </div>
+        
+        <div className="flex items-center gap-4 bg-surface/50 p-1.5 rounded-lg backdrop-blur-sm border border-white/5">
           <select 
-            className="bg-surface text-text border border-text/20 rounded px-3 py-1.5"
+            className="bg-transparent text-text/80 border-none outline-none px-3 py-1.5 text-sm font-medium cursor-pointer hover:text-primary transition-colors"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as 'year' | 'title')}
           >
-            <option value="year">Sort by Year</option>
-            <option value="title">Sort by Title</option>
+            <option value="year" className="bg-surface text-text">Sort by Year</option>
+            <option value="title" className="bg-surface text-text">Sort by Title</option>
           </select>
-          <Button variant="secondary" size="sm">Filter</Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+      {/* Grid Layout */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-6 md:gap-8 pb-20">
         {sortedMovies.map(movie => (
-          <div key={movie.id} className="flex justify-center">
-            <MovieCard 
-              movie={movie} 
-              onClick={setSelectedMovie} 
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-            />
-          </div>
+          <MovieCard 
+            key={movie.id}
+            movie={movie} 
+            onClick={setSelectedMovie} 
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />
         ))}
       </div>
 

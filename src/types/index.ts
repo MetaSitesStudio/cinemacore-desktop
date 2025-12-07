@@ -6,6 +6,8 @@ export interface Movie {
   overview?: string;
   posterUrl: string;
   backdropUrl: string;
+  tmdbPosterUrl?: string;
+  tmdbBackdropUrl?: string;
   rating: number;
   runtime: number; // minutes
   genres: string[];
@@ -24,6 +26,8 @@ export interface MovieFile {
   extension?: string;
   createdAt?: string;
   modifiedAt?: string;
+  lastSeenAt?: string;
+  folderId?: string;
   videoResolution?: string; // e.g. "1080p", "4K"
   audioLanguageCodes?: string[];
   subtitleLanguageCodes?: string[];
@@ -55,9 +59,27 @@ export interface MovieFile {
   
   metadataSource?: "omdb" | "manual";
 
+  // TMDB Artwork
+  tmdbBackdropUrl?: string | null;
+  tmdbPosterUrl?: string | null;
+
   // User preferences
   isFavorite?: boolean;
   isHidden?: boolean;
+}
+
+export interface LibraryFolder {
+  id: string;
+  path: string;
+  displayName?: string;
+  createdAt: string;
+  isActive: boolean;
+}
+
+export interface DuplicateGroup {
+  normalizedName: string;
+  fileSize: number;
+  files: MovieFile[];
 }
 
 export interface ScanJob {
@@ -78,6 +100,8 @@ export interface Series {
   description: string;
   posterUrl: string;
   backdropUrl: string;
+  tmdbPosterUrl?: string;
+  tmdbBackdropUrl?: string;
   rating: number;
   seasons: number;
   genres: string[];
@@ -93,4 +117,27 @@ export interface PlaybackSettings {
   playbackMode: "systemDefault" | "custom";
   customPlayerPath: string | null;
   customPlayerLabel: string | null;
+}
+
+export interface SearchMediaRequest {
+  query: string;
+  mediaType: "all" | "movie" | "series";
+  yearFrom?: number;
+  yearTo?: number;
+  folderId?: string;
+  limit?: number;
+}
+
+export interface MediaSearchResult {
+  id: string;
+  mediaType: "movie" | "episode";
+  title: string;
+  seriesTitle?: string;
+  seasonNumber?: number;
+  episodeNumber?: number;
+  year?: number;
+  posterUrl?: string;
+  folderId: string;
+  filePath: string;
+  rating?: number;
 }

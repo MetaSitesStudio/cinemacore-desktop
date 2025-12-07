@@ -6,6 +6,16 @@ export class LibraryMovieService implements IMovieService {
 
   async getAllMovies(): Promise<Movie[]> {
     const files = await this.libraryService.getAllFiles();
+    
+    // DEBUG: Log the first few files to see what's coming from the DB
+    if (files.length > 0) {
+      console.log('[LibraryMovieService] First 3 files from DB:', files.slice(0, 3).map(f => ({
+        title: f.fileName,
+        tmdbPosterUrl: f.tmdbPosterUrl,
+        metadataPoster: f.metadata?.posterUrl
+      })));
+    }
+
     return files
       .filter(f => (f.mediaType === 'movie' || !f.mediaType) && !f.isHidden)
       .map(f => ({
@@ -13,8 +23,11 @@ export class LibraryMovieService implements IMovieService {
         title: f.metadata?.title || f.guessedTitle || f.fileName,
         year: f.metadata?.year || f.guessedYear || 0,
         description: f.metadata?.plot || '',
+        // Map DB columns to Movie fields
         posterUrl: f.metadata?.posterUrl || '',
-        backdropUrl: '', // No backdrop yet
+        backdropUrl: '', // Legacy field, usually empty
+        tmdbPosterUrl: f.tmdbPosterUrl || undefined,
+        tmdbBackdropUrl: f.tmdbBackdropUrl || undefined,
         rating: parseFloat(f.metadata?.rating || '0') || 0,
         runtime: f.metadata?.runtimeMinutes || 0,
         genres: f.metadata?.genres || [],

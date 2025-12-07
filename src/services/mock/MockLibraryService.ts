@@ -1,8 +1,12 @@
 import { ILibraryService } from '../interfaces';
-import { MovieFile } from '@/types';
+import { MovieFile, LibraryFolder } from '@/types';
 
 export class MockLibraryService implements ILibraryService {
   private files: MovieFile[] = [];
+
+  async getFolders(): Promise<LibraryFolder[]> {
+    return [];
+  }
 
   async addOrUpdateFiles(files: MovieFile[]): Promise<void> {
     files.forEach(incomingFile => {
@@ -42,6 +46,11 @@ export class MockLibraryService implements ILibraryService {
     if (file) {
       file.linkedMovieId = movieId;
     }
+  }
+
+  async rescanFolder(_folderId: string): Promise<void> {
+    // Mock implementation: do nothing or simulate scan
+    console.log("Mock rescan folder");
   }
 
   async getFilesForMovie(movieId: string): Promise<MovieFile[]> {

@@ -1,7 +1,11 @@
 import { ILibraryService } from '../interfaces';
-import { MovieFile } from '@/types';
+import { MovieFile, LibraryFolder } from '@/types';
 
 export class SQLiteLibraryService implements ILibraryService {
+  async getFolders(): Promise<LibraryFolder[]> {
+    return window.cinemacore.library.getFolders();
+  }
+
   async getAllFiles(): Promise<MovieFile[]> {
     return window.cinemacore.db.getAllFiles();
   }
@@ -10,6 +14,10 @@ export class SQLiteLibraryService implements ILibraryService {
     for (const f of files) {
       await window.cinemacore.db.upsertFile(f);
     }
+  }
+
+  async rescanFolder(folderId: string): Promise<void> {
+    await window.cinemacore.library.rescanFolder(folderId);
   }
 
   async linkFileToMovie(_fileId: string, _movieId: string): Promise<void> {

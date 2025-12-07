@@ -14,6 +14,8 @@ interface SeriesDetailOverlayProps {
   seriesTitle: string;
   episodes: MovieFile[];
   seriesMetadata?: MovieFileMetadata | null;
+  posterUrl?: string;
+  backdropUrl?: string;
   onDeleteEpisode?: (file: MovieFile) => void;
   onEditEpisode?: (file: MovieFile) => void;
   onDeleteSeries?: () => void;
@@ -26,6 +28,7 @@ export const SeriesDetailOverlay: React.FC<SeriesDetailOverlayProps> = ({
   seriesTitle, 
   episodes,
   seriesMetadata,
+  posterUrl: propPosterUrl,
   onDeleteEpisode,
   onEditEpisode,
   onDeleteSeries,
@@ -33,6 +36,12 @@ export const SeriesDetailOverlay: React.FC<SeriesDetailOverlayProps> = ({
 }) => {
   const { playMedia } = usePlayMedia();
   const [selectedEpisodeId, setSelectedEpisodeId] = useState<string | null>(null);
+  const [posterError, setPosterError] = useState(false);
+
+  // Reset error state when series changes
+  useEffect(() => {
+    setPosterError(false);
+  }, [seriesTitle]);
 
   // Sort episodes: Season asc, Episode asc
   const sortedEpisodes = useMemo(() => {
@@ -64,18 +73,31 @@ export const SeriesDetailOverlay: React.FC<SeriesDetailOverlayProps> = ({
     }
   }, [isOpen, sortedEpisodes, selectedEpisodeId]);
 
-  if (!isOpen) return null;
-
   const selectedEpisode = sortedEpisodes.find(e => e.id === selectedEpisodeId) || sortedEpisodes[0];
   
   // Determine display info
   // Prefer seriesMetadata if available (passed from parent), otherwise fallback to first episode's metadata
   const displayMetadata = seriesMetadata || sortedEpisodes[0]?.metadata;
-  const posterUrl = displayMetadata?.posterUrl;
+  
+  const tmdbPosterUrl = useMemo(() => sortedEpisodes.find(e => e.tmdbPosterUrl)?.tmdbPosterUrl, [sortedEpisodes]);
+  const omdbPosterUrl = displayMetadata?.posterUrl;
+
+  const posterSrc = useMemo(() => {
+    if (!posterError && tmdbPosterUrl) {
+      return tmdbPosterUrl;
+    }
+    // If TMDB failed or missing, try OMDb or prop
+    // Avoid using propPosterUrl if it's the same as tmdbPosterUrl and it failed
+    if (propPosterUrl && propPosterUrl !== tmdbPosterUrl) return propPosterUrl;
+    return omdbPosterUrl;
+  }, [tmdbPosterUrl, omdbPosterUrl, propPosterUrl, posterError]);
+
   const plot = seriesMetadata?.plot || sortedEpisodes[0]?.metadata?.plot || "No description available.";
   const year = seriesMetadata?.year || sortedEpisodes[0]?.metadata?.year || sortedEpisodes[0]?.guessedYear;
   const rating = seriesMetadata?.rating || sortedEpisodes[0]?.metadata?.rating;
   const genres = seriesMetadata?.genres || sortedEpisodes[0]?.metadata?.genres || [];
+
+  if (!isOpen) return null;
   
   // Calculate season count
   const seasonCount = episodesBySeason.size;
@@ -105,36 +127,43 @@ export const SeriesDetailOverlay: React.FC<SeriesDetailOverlayProps> = ({
           {/* Left Panel: Series Info */}
           <div className="w-full md:w-1/3 bg-background/30 p-6 flex flex-col overflow-y-auto border-r border-text/10">
             <div className="aspect-[2/3] w-full rounded-lg overflow-hidden shadow-lg mb-6 bg-background/50 relative group">
-              {posterUrl ? (
+              {posterSrc ? (
                 <img 
-                  src={posterUrl} 
+                  src={posterSrc} 
                   alt={seriesTitle} 
                   className="w-full h-full object-cover"
+                  onError={(e) => {
+                    if (!posterError && tmdbPosterUrl && posterSrc === tmdbPosterUrl) {
+                      setPosterError(true);
+                    } else {
+                      e.currentTarget.src = '/placeholder-poster.png';
+                    }
+                  }}
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-text/30">
-                  No Poster
+                <div className="w-full h-full flex items-center justify-center text-text/30 bg-surface/50">
+                  <span className="text-xs">No Poster</span>
                 </div>
               )}
 
               {/* Series Actions */}
-              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+              <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0 z-20">
                 {onEditSeries && (
                   <button 
                     onClick={(e) => { e.stopPropagation(); onEditSeries(); }}
-                    className="p-1.5 bg-background/80 rounded-full text-text/70 hover:text-primary hover:bg-background transition-colors"
+                    className="p-2 bg-black/60 backdrop-blur-md rounded-full text-white/90 hover:text-primary hover:bg-black/80 transition-colors border border-white/10"
                     title="Edit Series Metadata"
                   >
-                    <Edit2 className="w-3 h-3" />
+                    <Edit2 className="w-4 h-4" />
                   </button>
                 )}
                 {onDeleteSeries && (
                   <button 
                     onClick={(e) => { e.stopPropagation(); onDeleteSeries(); }}
-                    className="p-1.5 bg-background/80 rounded-full text-text/70 hover:text-red-500 hover:bg-background transition-colors"
+                    className="p-2 bg-black/60 backdrop-blur-md rounded-full text-white/90 hover:text-red-500 hover:bg-black/80 transition-colors border border-white/10"
                     title="Delete Series"
                   >
-                    <Trash2 className="w-3 h-3" />
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 )}
               </div>

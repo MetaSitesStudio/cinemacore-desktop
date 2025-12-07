@@ -1,4 +1,4 @@
-import { Movie, Series, MovieFile, ScanJob } from '@/types';
+import { Movie, Series, MovieFile, ScanJob, LibraryFolder } from '@/types';
 
 export interface IMovieService {
   getFeaturedMovie(): Promise<Movie>;
@@ -23,10 +23,12 @@ export interface IFileScannerService {
 }
 
 export interface ILibraryService {
+  getFolders(): Promise<LibraryFolder[]>;
   addOrUpdateFiles(files: MovieFile[]): Promise<void>;
   linkFileToMovie(fileId: string, movieId: string): Promise<void>;
   getFilesForMovie(movieId: string): Promise<MovieFile[]>;
   getAllFiles(): Promise<MovieFile[]>;
+  rescanFolder(folderId: string): Promise<void>;
   
   // User actions
   hideFile(id: string): Promise<void>;

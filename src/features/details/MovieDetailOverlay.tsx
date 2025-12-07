@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Play, Check, Trash2, Edit2 } from 'lucide-react';
 import { Movie, MovieFile } from '@/types';
 import { Button } from '@/components/ui/Button';
@@ -25,7 +25,20 @@ export const MovieDetailOverlay: React.FC<MovieDetailOverlayProps> = ({ movie, o
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [fileToDelete, setFileToDelete] = useState<MovieFile | null>(null);
 
+  // Image Error Handling
+  const [tmdbBackdropFailed, setTmdbBackdropFailed] = useState(false);
+  const [showFallback, setShowFallback] = useState(false);
+
+  useEffect(() => {
+    setTmdbBackdropFailed(false);
+    setShowFallback(false);
+  }, [movie?.id]);
+
   if (!movie) return null;
+
+  const activeBackdrop = (!tmdbBackdropFailed && movie.tmdbBackdropUrl) 
+    ? movie.tmdbBackdropUrl 
+    : movie.backdropUrl;
 
   const getFile = async () => {
     const allFiles = await libraryService.getAllFiles();
@@ -75,9 +88,13 @@ export const MovieDetailOverlay: React.FC<MovieDetailOverlayProps> = ({ movie, o
 
   const handleConfirmDiskDelete = async () => {
     if (fileToDelete) {
-      await libraryService.deleteFileFromDisk(fileToDelete);
-      if (onUpdate) onUpdate();
-      onClose();
+      const success = await libraryService.deleteFileFromDisk(fileToDelete);
+      if (success) {
+        if (onUpdate) onUpdate();
+        onClose();
+      } else {
+        alert("Failed to delete file from disk. It might be in use or locked. Check the console for details.");
+      }
     }
     setIsDeleteDialogOpen(false);
   };
@@ -99,12 +116,34 @@ export const MovieDetailOverlay: React.FC<MovieDetailOverlayProps> = ({ movie, o
           </button>
 
           {/* Hero Image */}
-          <div className="relative aspect-video w-full">
-            <img 
-              src={movie.backdropUrl} 
-              alt={movie.title} 
-              className="w-full h-full object-cover"
-            />
+          <div className="relative aspect-video w-full overflow-hidden bg-black">
+            {activeBackdrop && !showFallback ? (
+              <img 
+                src={activeBackdrop} 
+                alt={movie.title} 
+                className="w-full h-full object-cover"
+                onError={() => {
+                  if (!tmdbBackdropFailed && movie.tmdbBackdropUrl) {
+                    setTmdbBackdropFailed(true);
+                  } else {
+                    setShowFallback(true);
+                  }
+                }}
+              />
+            ) : (
+              // Fallback: Blurred Poster or Gradient
+              <div className="w-full h-full relative">
+                 {movie.tmdbPosterUrl || movie.posterUrl ? (
+                    <img 
+                      src={movie.tmdbPosterUrl || movie.posterUrl} 
+                      alt="" 
+                      className="w-full h-full object-cover blur-3xl opacity-50 scale-110"
+                    />
+                 ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-primary/20 to-background" />
+                 )}
+              </div>
+            )}
             <div className="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-transparent" />
             
             <div className="absolute bottom-8 left-8">
