@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Default (Dark) Theme */
+    --bg: #0b0c10;
+    --surface: #121417;
+    --primary: #e63946;
+    --secondary: #457b9d;
+    --text: #ffffffd0;
+  }
+
+  .theme-light {
+    --bg: #f8f9fa;
+    --surface: #ffffff;
+    --primary: #1d3557;
+    --secondary: #457b9d;
+    --text: #1a1a1a;
+  }
+
+  .theme-summer {
+    --bg: #023047;
+    --surface: #035681;
+    --primary: #ffb703;
+    --secondary: #fb8500;
+    --text: #ffffff;
+  }
+
+  body {
+    @apply bg-background antialiased transition-colors duration-300;
+    color: var(--text);
+  }
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
