@@ -12,6 +12,7 @@ export default {
         primary: 'var(--primary)',
         secondary: 'var(--secondary)',
         text: 'var(--text)',
+        input: 'var(--input-bg)',
       }
     },
   },

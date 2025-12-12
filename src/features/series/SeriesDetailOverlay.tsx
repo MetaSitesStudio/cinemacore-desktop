@@ -29,6 +29,7 @@ export const SeriesDetailOverlay: React.FC<SeriesDetailOverlayProps> = ({
   episodes,
   seriesMetadata,
   posterUrl: propPosterUrl,
+  backdropUrl,
   onDeleteEpisode,
   onEditEpisode,
   onDeleteSeries,
@@ -80,7 +81,23 @@ export const SeriesDetailOverlay: React.FC<SeriesDetailOverlayProps> = ({
   const displayMetadata = seriesMetadata || sortedEpisodes[0]?.metadata;
   
   const tmdbPosterUrl = useMemo(() => sortedEpisodes.find(e => e.tmdbPosterUrl)?.tmdbPosterUrl, [sortedEpisodes]);
+  const tmdbBackdropUrl = useMemo(() => sortedEpisodes.find(e => e.tmdbBackdropUrl)?.tmdbBackdropUrl, [sortedEpisodes]);
   const omdbPosterUrl = displayMetadata?.posterUrl;
+
+  // DEBUG: Log artwork sources
+  useEffect(() => {
+    if (isOpen) {
+      console.log('[SeriesDetailOverlay] Artwork Sources:', {
+        seriesTitle,
+        tmdbPosterUrl,
+        tmdbBackdropUrl,
+        omdbPosterUrl,
+        propPosterUrl,
+        episodesCount: sortedEpisodes.length,
+        episodesWithTmdb: sortedEpisodes.filter(e => e.tmdbPosterUrl).length
+      });
+    }
+  }, [isOpen, seriesTitle, tmdbPosterUrl, tmdbBackdropUrl, omdbPosterUrl, propPosterUrl, sortedEpisodes]);
 
   const posterSrc = useMemo(() => {
     if (!posterError && tmdbPosterUrl) {
@@ -91,6 +108,8 @@ export const SeriesDetailOverlay: React.FC<SeriesDetailOverlayProps> = ({
     if (propPosterUrl && propPosterUrl !== tmdbPosterUrl) return propPosterUrl;
     return omdbPosterUrl;
   }, [tmdbPosterUrl, omdbPosterUrl, propPosterUrl, posterError]);
+
+  const activeBackdrop = tmdbBackdropUrl || backdropUrl || posterSrc;
 
   const plot = seriesMetadata?.plot || sortedEpisodes[0]?.metadata?.plot || "No description available.";
   const year = seriesMetadata?.year || sortedEpisodes[0]?.metadata?.year || sortedEpisodes[0]?.guessedYear;
@@ -123,162 +142,147 @@ export const SeriesDetailOverlay: React.FC<SeriesDetailOverlayProps> = ({
           <X className="w-6 h-6 text-text" />
         </button>
 
-        <div className="flex flex-col md:flex-row h-full overflow-hidden">
-          {/* Left Panel: Series Info */}
-          <div className="w-full md:w-1/3 bg-background/30 p-6 flex flex-col overflow-y-auto border-r border-text/10">
-            <div className="aspect-[2/3] w-full rounded-lg overflow-hidden shadow-lg mb-6 bg-background/50 relative group">
-              {posterSrc ? (
-                <img 
-                  src={posterSrc} 
-                  alt={seriesTitle} 
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    if (!posterError && tmdbPosterUrl && posterSrc === tmdbPosterUrl) {
-                      setPosterError(true);
-                    } else {
-                      e.currentTarget.src = '/placeholder-poster.png';
-                    }
-                  }}
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-text/30 bg-surface/50">
-                  <span className="text-xs">No Poster</span>
-                </div>
-              )}
-
-              {/* Series Actions */}
-              <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0 z-20">
+        {/* Top: Backdrop & Hero Info */}
+        <div className="relative aspect-video w-full overflow-hidden bg-black flex-shrink-0 max-h-[40vh]">
+            {activeBackdrop ? (
+              <img 
+                src={activeBackdrop} 
+                alt={seriesTitle} 
+                className="w-full h-full object-cover"
+                onError={() => {
+                   // Fallback logic if needed
+                }}
+              />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-primary/20 to-background" />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/20 to-transparent" />
+            
+            <div className="absolute bottom-6 left-8 right-8">
+              <h2 className="text-4xl font-bold mb-4 text-text drop-shadow-lg">{seriesTitle}</h2>
+              <div className="flex gap-4">
+                <Button className="gap-2" onClick={handlePlay}>
+                  <Play className="w-5 h-5 fill-current" /> 
+                  {selectedEpisode ? `Play S${selectedEpisode.seasonNumber} E${selectedEpisode.episodeNumber}` : 'Play'}
+                </Button>
                 {onEditSeries && (
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); onEditSeries(); }}
-                    className="p-2 bg-black/60 backdrop-blur-md rounded-full text-white/90 hover:text-primary hover:bg-black/80 transition-colors border border-white/10"
-                    title="Edit Series Metadata"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
+                  <Button variant="secondary" className="gap-2" onClick={onEditSeries}>
+                    <Edit2 className="w-5 h-5" /> Edit Series
+                  </Button>
                 )}
                 {onDeleteSeries && (
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); onDeleteSeries(); }}
-                    className="p-2 bg-black/60 backdrop-blur-md rounded-full text-white/90 hover:text-red-500 hover:bg-black/80 transition-colors border border-white/10"
-                    title="Delete Series"
+                  <Button 
+                    className="gap-2 bg-red-500/10 text-red-500 hover:bg-red-500/20 border-red-500/20" 
+                    onClick={onDeleteSeries}
                   >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                    <Trash2 className="w-5 h-5" /> Delete Series
+                  </Button>
                 )}
               </div>
             </div>
+        </div>
 
-            <h2 className="text-2xl font-bold mb-2 text-text">{seriesTitle}</h2>
-            
-            <div className="flex flex-wrap items-center gap-3 text-sm text-text/60 mb-4">
-              {year && <span>{year}</span>}
-              <span>{seasonCount} Season{seasonCount !== 1 ? 's' : ''}</span>
-              {rating && <span className="border border-text/30 px-1.5 rounded text-xs">{rating}</span>}
-              <span className="bg-text/10 px-1.5 rounded text-xs">HD</span>
-            </div>
-
-            <div className="flex flex-wrap gap-2 mb-6">
-              {genres.map((g: string) => (
-                <span key={g} className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
-                  {g}
-                </span>
-              ))}
-            </div>
-
-            <p className="text-sm text-text/70 leading-relaxed mb-6">
-              {plot}
-            </p>
-
-            <div className="mt-auto pt-6 border-t border-text/10">
-              <Button className="w-full gap-2 mb-3" onClick={handlePlay}>
-                <Play className="w-4 h-4 fill-current" /> 
-                {selectedEpisode ? `Play S${selectedEpisode.seasonNumber} E${selectedEpisode.episodeNumber}` : 'Play'}
-              </Button>
-            </div>
-          </div>
-
-          {/* Right Panel: Episodes List */}
-          <div className="w-full md:w-2/3 bg-surface flex flex-col h-full overflow-hidden">
-            <div className="p-6 border-b border-text/10">
-              <h3 className="font-semibold text-lg">Episodes</h3>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {Array.from(episodesBySeason.entries()).sort((a, b) => a[0] - b[0]).map(([seasonNum, seasonEpisodes]) => (
-                <div key={seasonNum}>
-                  <h4 className="text-sm font-bold text-text/50 uppercase tracking-wider mb-3 sticky top-0 bg-surface py-2">
-                    Season {seasonNum}
-                  </h4>
-                  <div className="space-y-2">
-                    {seasonEpisodes.sort((a, b) => (a.episodeNumber || 0) - (b.episodeNumber || 0)).map(ep => (
-                      <div 
-                        key={ep.id}
-                        onClick={() => setSelectedEpisodeId(ep.id)}
-                        className={`
-                          group flex items-center gap-4 p-3 rounded-md cursor-pointer transition-all
-                          ${selectedEpisodeId === ep.id 
-                            ? 'bg-primary/10 border border-primary/20' 
-                            : 'hover:bg-background/50 border border-transparent'}
-                        `}
-                      >
-                        <div className="flex-shrink-0 w-8 text-center text-sm font-mono text-text/50">
-                          {ep.episodeNumber}
-                        </div>
-                        
-                        <div className="flex-grow min-w-0">
-                          <div className={`font-medium text-sm truncate ${selectedEpisodeId === ep.id ? 'text-primary' : 'text-text'}`}>
-                            {ep.metadata?.title || ep.episodeTitle || formatGuessedTitle(ep)}
-                          </div>
-                          <div className="text-xs text-text/50 truncate">
-                            {ep.metadata?.plot || `${Math.round((ep.fileSizeBytes || 0) / 1024 / 1024)} MB • ${ep.videoResolution || 'Unknown'}`}
-                          </div>
-                        </div>
-
-                        {ep.metadata?.rating && (
-                          <div className="text-xs text-text/40 hidden group-hover:block">
-                            ★ {ep.metadata.rating}
-                          </div>
-                        )}
-
-                        {/* Episode Actions */}
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {onEditEpisode && (
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); onEditEpisode(ep); }}
-                              className="p-1.5 rounded-full text-text/50 hover:text-primary hover:bg-primary/10 transition-colors"
-                              title="Edit Episode"
-                            >
-                              <Edit2 className="w-3 h-3" />
-                            </button>
-                          )}
-                          {onDeleteEpisode && (
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); onDeleteEpisode(ep); }}
-                              className="p-1.5 rounded-full text-text/50 hover:text-red-500 hover:bg-red-500/10 transition-colors"
-                              title="Delete Episode"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          )}
-                        </div>
-                        
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            playMedia(ep);
-                          }}
-                          className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${selectedEpisodeId === ep.id ? 'bg-primary text-white' : 'bg-background text-text/30 group-hover:text-primary'}`}
-                        >
-                          <Play className="w-3 h-3 fill-current" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+        {/* Bottom: Content & Episodes */}
+        <div className="flex-1 overflow-y-auto detail-overlay-scroll p-8">
+            <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-8 mb-8">
+                {/* Left: Description */}
+                <div className="space-y-6">
+                    <div className="flex items-center gap-4 text-sm text-text/60">
+                        <span>{year}</span>
+                        <span>{seasonCount} Season{seasonCount !== 1 ? 's' : ''}</span>
+                        {rating && <span className="border border-text/30 px-1.5 rounded text-xs">{rating}</span>}
+                        <span className="border border-text/30 px-1.5 rounded text-xs">HD</span>
+                    </div>
+                    <p className="text-lg text-text/70 leading-relaxed">
+                        {plot}
+                    </p>
                 </div>
-              ))}
+
+                {/* Right: Metadata */}
+                <div className="space-y-4 text-sm text-text/60">
+                    <div>
+                        <span className="block text-text/50 mb-1">Genres:</span>
+                        <span className="text-text">{genres.join(', ')}</span>
+                    </div>
+                    <div>
+                        <span className="block text-text/50 mb-1">Original Language:</span>
+                        <span className="text-text">English</span>
+                    </div>
+                </div>
             </div>
-          </div>
+
+            {/* Episode List */}
+            <div className="border-t border-text/10 pt-6">
+                <h3 className="font-semibold text-lg mb-4">Episodes</h3>
+                <div className="space-y-8">
+                  {Array.from(episodesBySeason.entries()).sort((a, b) => a[0] - b[0]).map(([seasonNum, seasonEpisodes]) => (
+                    <div key={seasonNum}>
+                      <h4 className="text-sm font-bold text-text/50 uppercase tracking-wider mb-3">
+                        Season {seasonNum}
+                      </h4>
+                      <div className="grid grid-cols-1 gap-2">
+                        {seasonEpisodes.sort((a, b) => (a.episodeNumber || 0) - (b.episodeNumber || 0)).map(ep => (
+                          <div 
+                            key={ep.id}
+                            onClick={() => setSelectedEpisodeId(ep.id)}
+                            className={`
+                              group flex items-center gap-4 p-3 rounded-md cursor-pointer transition-all
+                              ${selectedEpisodeId === ep.id 
+                                ? 'bg-primary/10 border border-primary/20' 
+                                : 'hover:bg-background/50 border border-transparent'}
+                            `}
+                          >
+                            <div className="flex-shrink-0 w-8 text-center text-sm font-mono text-text/50">
+                              {ep.episodeNumber}
+                            </div>
+                            
+                            <div className="flex-grow min-w-0">
+                              <div className={`font-medium text-sm truncate ${selectedEpisodeId === ep.id ? 'text-primary' : 'text-text'}`}>
+                                {ep.metadata?.title || ep.episodeTitle || formatGuessedTitle(ep)}
+                              </div>
+                              <div className="text-xs text-text/50 truncate">
+                                {ep.metadata?.plot || `${Math.round((ep.fileSizeBytes || 0) / 1024 / 1024)} MB • ${ep.videoResolution || 'Unknown'}`}
+                              </div>
+                            </div>
+
+                            {/* Episode Actions */}
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              {onEditEpisode && (
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); onEditEpisode(ep); }}
+                                  className="p-1.5 rounded-full text-text/50 hover:text-primary hover:bg-primary/10 transition-colors"
+                                  title="Edit Episode"
+                                >
+                                  <Edit2 className="w-3 h-3" />
+                                </button>
+                              )}
+                              {onDeleteEpisode && (
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); onDeleteEpisode(ep); }}
+                                  className="p-1.5 rounded-full text-text/50 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                                  title="Delete Episode"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+                            
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                playMedia(ep);
+                              }}
+                              className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${selectedEpisodeId === ep.id ? 'bg-primary text-white' : 'bg-background text-text/30 group-hover:text-primary'}`}
+                            >
+                              <Play className="w-3 h-3 fill-current" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+            </div>
         </div>
       </div>
     </div>

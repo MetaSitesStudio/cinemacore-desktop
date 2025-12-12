@@ -7,18 +7,16 @@ export class LibraryMovieService implements IMovieService {
   async getAllMovies(): Promise<Movie[]> {
     const files = await this.libraryService.getAllFiles();
     
-    // DEBUG: Log the first few files to see what's coming from the DB
-    if (files.length > 0) {
-      console.log('[LibraryMovieService] First 3 files from DB:', files.slice(0, 3).map(f => ({
-        title: f.fileName,
-        tmdbPosterUrl: f.tmdbPosterUrl,
-        metadataPoster: f.metadata?.posterUrl
-      })));
+    const movies = files
+      .filter(f => (f.mediaType === 'movie' || !f.mediaType) && !f.isHidden);
+
+    console.log(`[LibraryMovieService] getAllMovies: Found ${files.length} total files, returning ${movies.length} movies.`);
+    
+    if (movies.length > 0) {
+        console.log('[LibraryMovieService] First movie metadata:', movies[0].metadata);
     }
 
-    return files
-      .filter(f => (f.mediaType === 'movie' || !f.mediaType) && !f.isHidden)
-      .map(f => ({
+    return movies.map(f => ({
         id: f.id,
         title: f.metadata?.title || f.guessedTitle || f.fileName,
         year: f.metadata?.year || f.guessedYear || 0,
@@ -31,6 +29,10 @@ export class LibraryMovieService implements IMovieService {
         rating: parseFloat(f.metadata?.rating || '0') || 0,
         runtime: f.metadata?.runtimeMinutes || 0,
         genres: f.metadata?.genres || [],
+        // @ts-ignore
+        cast: f.metadata?.cast || [],
+        // @ts-ignore
+        director: f.metadata?.crew?.find((c: any) => c.job === 'Director')?.name,
         isWatched: false // Not tracked yet
       }));
   }
@@ -56,6 +58,14 @@ export class LibraryMovieService implements IMovieService {
         genres: []
       };
     }
+
+    // Prefer movies with a backdrop
+    const moviesWithBackdrop = movies.filter(m => m.tmdbBackdropUrl || m.backdropUrl);
+    
+    if (moviesWithBackdrop.length > 0) {
+        return moviesWithBackdrop[Math.floor(Math.random() * moviesWithBackdrop.length)];
+    }
+
     // Return random movie
     return movies[Math.floor(Math.random() * movies.length)];
   }

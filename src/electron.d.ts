@@ -25,6 +25,7 @@ export interface IElectronAPI {
     addFolder: () => Promise<LibraryFolder[] | null>;
     removeFolder: (folderId: string, deleteFiles: boolean) => Promise<LibraryFolder[]>;
     rescanFolder: (folderId: string) => Promise<{ new: number; updated: number; removed: number }>;
+    reset: () => Promise<void>;
     getDuplicates: () => Promise<DuplicateGroup[]>;
     removeFile: (fileId: string) => Promise<void>;
     searchMedia: (payload: SearchMediaRequest) => Promise<MediaSearchResult[]>;

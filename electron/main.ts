@@ -7,6 +7,7 @@ import { pathToFileURL } from 'url';
 import { parseMovieFilename } from '../src/utils/filenameParser';
 import { ScanJob, MovieFile, PlaybackSettings, LibraryFolder, DuplicateGroup } from '../src/types';
 import { fetchTmdbArtworkForImdbId } from './services/tmdbArtworkService';
+import { fetchTmdbMetadata } from './services/tmdbMetadataService';
 
 let mainWindow: BrowserWindow | null = null;
 let db: Database.Database | null = null;
@@ -58,6 +59,8 @@ function initDatabase() {
       metadata JSON,
       metadataSource TEXT,
       linkedMovieId TEXT,
+      tmdbBackdropUrl TEXT,
+      tmdbPosterUrl TEXT,
       FOREIGN KEY(folderId) REFERENCES library_folders(id)
     )
   `).run();
@@ -75,6 +78,12 @@ function initDatabase() {
   try {
     db.prepare("ALTER TABLE movie_files ADD COLUMN tmdbPosterUrl TEXT").run();
   } catch (e) { /* ignore if exists */ }
+  try {
+    db.prepare("ALTER TABLE movie_files ADD COLUMN metadata JSON").run();
+  } catch (e) { /* ignore if exists */ }
+  try {
+    db.prepare("ALTER TABLE movie_files ADD COLUMN metadataSource TEXT").run();
+  } catch (e) { /* ignore if exists */ }
 
   db.prepare(`
     CREATE TABLE IF NOT EXISTS settings (
@@ -85,6 +94,8 @@ function initDatabase() {
 }
 
 // --- Helper Functions ---
+
+export { getTmdbApiKey };
 
 function getTmdbApiKey(): string | undefined {
   if (!db) return undefined;
@@ -334,14 +345,14 @@ ipcMain.handle("cinemacore:db:upsertFile", async (_event, file: MovieFile) => {
     }
   }
 
-  console.log('[SCAN] writing metadata', {
-    fullPath: file.fullPath,
-    title: file.metadata?.title,
-    imdbId: file.metadata?.imdbId,
-    posterUrl: file.metadata?.posterUrl,
-    tmdbPosterUrl: file.tmdbPosterUrl,
-    tmdbBackdropUrl: file.tmdbBackdropUrl,
-  });
+  // console.log('[SCAN] writing metadata', {
+  //   fullPath: file.fullPath,
+  //   title: file.metadata?.title,
+  //   imdbId: file.metadata?.imdbId,
+  //   posterUrl: file.metadata?.posterUrl,
+  //   tmdbPosterUrl: file.tmdbPosterUrl,
+  //   tmdbBackdropUrl: file.tmdbBackdropUrl,
+  // });
   
   const stmt = db.prepare(`
     INSERT INTO movie_files (
@@ -498,6 +509,13 @@ ipcMain.handle("cinemacore:library:getFolders", () => {
   return db.prepare("SELECT * FROM library_folders ORDER BY createdAt DESC").all();
 });
 
+ipcMain.handle("cinemacore:library:reset", () => {
+  if (!db) return;
+  db.prepare("DELETE FROM movie_files").run();
+  // We keep the folders so the user doesn't have to re-add them
+  console.log("[Library] Database cleared (files only).");
+});
+
 ipcMain.handle("cinemacore:library:addFolder", async () => {
   if (!mainWindow || !db) return null;
   
@@ -602,6 +620,12 @@ ipcMain.handle("cinemacore:library:rescanFolder", async (_event, folderId: strin
   const omdbKey = getOmdbApiKey();
   const tmdbKey = getTmdbApiKey();
 
+  if (!tmdbKey) {
+    sendProgress({ type: 'log', message: 'WARNING: TMDB API Key is missing! Metadata (Cast, Crew, Genres) will not be fetched.' });
+  } else {
+    sendProgress({ type: 'log', message: 'TMDB API Key found. Fetching rich metadata...' });
+  }
+
   // 1. Prepare Data (Async Phase)
   let processedCount = 0;
   for (const [filePath, stats] of foundFiles) {
@@ -627,7 +651,7 @@ ipcMain.handle("cinemacore:library:rescanFolder", async (_event, folderId: strin
 
       // FORCE UPDATE: If we have an IMDB ID but no TMDB artwork, try to fetch it
       if (currentMeta?.imdbID && tmdbKey && (!tmdbPosterUrl || !tmdbBackdropUrl)) {
-          // console.log(`[Scan] Fetching missing TMDB artwork for ${existing.fileName}`);
+          console.log(`[Scan] Fetching missing TMDB artwork for ${existing.fileName} (IMDb: ${currentMeta.imdbID})`);
           try {
              const artwork = await fetchTmdbArtworkForImdbId(currentMeta.imdbID, tmdbKey);
              if (artwork.backdropUrl) tmdbBackdropUrl = artwork.backdropUrl;
@@ -638,24 +662,49 @@ ipcMain.handle("cinemacore:library:rescanFolder", async (_event, folderId: strin
       }
 
       // Backfill metadata if missing
-      if ((!metadataStr || metadataStr === 'null') && omdbKey) {
+      if ((!metadataStr || metadataStr === 'null')) {
           const parsed = parseMovieFilename(path.basename(filePath));
           if (parsed.guessedTitle) {
-            try {
-                const omdbData = await fetchOmdb(parsed.guessedTitle, parsed.guessedYear?.toString(), omdbKey);
-                if (omdbData) {
-                    metadataStr = JSON.stringify(omdbData);
-                    metadataSource = 'omdb';
-                    if (tmdbKey && omdbData.imdbID) {
-                        const artwork = await fetchTmdbArtworkForImdbId(omdbData.imdbID, tmdbKey);
-                        if (artwork.backdropUrl) tmdbBackdropUrl = artwork.backdropUrl;
-                        if (artwork.posterUrl) tmdbPosterUrl = artwork.posterUrl;
+            // Try TMDB First
+            if (tmdbKey) {
+               try {
+                 const mediaType = parsed.mediaType === 'episode' ? 'tv' : 'movie';
+                 const tmdbData = await fetchTmdbMetadata(parsed.guessedTitle, parsed.guessedYear ?? undefined, mediaType, tmdbKey);
+                 if (tmdbData) {
+                   metadataStr = JSON.stringify(tmdbData);
+                   metadataSource = 'tmdb';
+                   tmdbPosterUrl = tmdbData.posterUrl;
+                   tmdbBackdropUrl = tmdbData.backdropUrl;
+                   console.log(`[Scan] Backfilled TMDB metadata for ${parsed.guessedTitle}`);
+                 }
+               } catch (e) { /* ignore */ }
+            }
+
+            // Fallback to OMDb
+            if ((!metadataStr || metadataStr === 'null') && omdbKey) {
+                try {
+                    const omdbData = await fetchOmdb(parsed.guessedTitle, parsed.guessedYear?.toString(), omdbKey);
+                    if (omdbData) {
+                        metadataStr = JSON.stringify(omdbData);
+                        metadataSource = 'omdb';
+                        if (tmdbKey && omdbData.imdbID) {
+                            const artwork = await fetchTmdbArtworkForImdbId(omdbData.imdbID, tmdbKey);
+                            if (artwork.backdropUrl) tmdbBackdropUrl = artwork.backdropUrl;
+                            if (artwork.posterUrl) tmdbPosterUrl = artwork.posterUrl;
+                        }
+                        console.log(`[Scan] Backfilled OMDb metadata for ${parsed.guessedTitle}`);
                     }
-                    console.log(`[Scan] Backfilled metadata for ${parsed.guessedTitle}`);
-                }
-            } catch (e) { /* ignore */ }
+                } catch (e) { /* ignore */ }
+            }
           }
       }
+
+      console.log('[SCAN][SERIES] artwork', {
+        title: existing.fileName,
+        imdbId: currentMeta?.imdbID,
+        tmdbPosterUrl,
+        tmdbBackdropUrl,
+      });
 
       filesToUpsert.push({
         ...existing,
@@ -691,29 +740,48 @@ ipcMain.handle("cinemacore:library:rescanFolder", async (_event, folderId: strin
         let metadataSource: string | null = null;
 
         // Fetch Metadata
-        if (omdbKey && parsed.guessedTitle) {
-          try {
-             const omdbData = await fetchOmdb(parsed.guessedTitle, parsed.guessedYear?.toString(), omdbKey);
-             if (omdbData) {
-               metadata = omdbData;
-               metadataSource = 'omdb';
-               
-               // Fetch TMDB Artwork if we have IMDb ID
-               if (tmdbKey && omdbData.imdbID) {
-                 const artwork = await fetchTmdbArtworkForImdbId(omdbData.imdbID, tmdbKey);
-                 if (artwork.backdropUrl) tmdbBackdropUrl = artwork.backdropUrl;
-                 if (artwork.posterUrl) tmdbPosterUrl = artwork.posterUrl;
+        // Priority: TMDB -> OMDb
+        if (parsed.guessedTitle) {
+          // Try TMDB First if key exists
+          if (tmdbKey) {
+             try {
+               const mediaType = parsed.mediaType === 'episode' ? 'tv' : 'movie';
+                 const tmdbData = await fetchTmdbMetadata(parsed.guessedTitle, parsed.guessedYear ?? undefined, mediaType, tmdbKey);               if (tmdbData) {
+                 metadata = tmdbData;
+                 metadataSource = 'tmdb';
+                 tmdbPosterUrl = tmdbData.posterUrl;
+                 tmdbBackdropUrl = tmdbData.backdropUrl;
+                 console.log(`[Scan] Fetched full TMDB metadata for ${parsed.guessedTitle}`);
                }
+             } catch (e) {
+               console.warn(`[Scan] TMDB fetch failed for ${parsed.guessedTitle}`, e);
              }
-          } catch (e) {
-            console.warn(`Metadata fetch failed for ${parsed.guessedTitle}:`, e);
+          }
+
+          // Fallback to OMDb if no metadata yet
+          if (!metadata && omdbKey) {
+            try {
+               const omdbData = await fetchOmdb(parsed.guessedTitle, parsed.guessedYear?.toString(), omdbKey);
+               if (omdbData) {
+                 metadata = omdbData;
+                 metadataSource = 'omdb';
+                 
+                 // Fetch TMDB Artwork if we have IMDb ID
+                 if (tmdbKey && omdbData.imdbID) {
+                   const artwork = await fetchTmdbArtworkForImdbId(omdbData.imdbID, tmdbKey);
+                   if (artwork.backdropUrl) tmdbBackdropUrl = artwork.backdropUrl;
+                   if (artwork.posterUrl) tmdbPosterUrl = artwork.posterUrl;
+                 }
+               }
+            } catch (e) {
+              console.warn(`Metadata fetch failed for ${parsed.guessedTitle}:`, e);
+            }
           }
         }
 
-        console.log('[SCAN] DB payload for', filePath, {
+        console.log('[SCAN][SERIES] artwork', {
           title: parsed.guessedTitle,
           imdbId: metadata?.imdbID,
-          posterUrl: metadata?.posterUrl,
           tmdbPosterUrl,
           tmdbBackdropUrl,
         });

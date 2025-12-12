@@ -1,27 +1,56 @@
 import React, { useState } from 'react';
 import { Movie } from '@/types';
-import { Trash2, Edit2 } from 'lucide-react';
+import { CardContextMenu } from '@/components/ui/CardContextMenu';
 
 interface MovieCardProps {
   movie: Movie;
   onClick: (movie: Movie) => void;
   onDelete?: (movie: Movie) => void;
   onEdit?: (movie: Movie) => void;
+  onUpdate?: () => void;
 }
 
-export const MovieCard: React.FC<MovieCardProps> = ({ movie, onClick, onDelete, onEdit }) => {
+export const MovieCard: React.FC<MovieCardProps> = ({ movie, onClick, onDelete, onEdit, onUpdate }) => {
   const [broken, setBroken] = useState(false);
-
-  console.log('[IMG] MovieCard src data', {
-    title: movie.title,
-    posterUrl: movie.posterUrl,
-    tmdbPosterUrl: movie.tmdbPosterUrl,
-    tmdbBackdropUrl: movie.tmdbBackdropUrl,
-  });
 
   const src = broken 
     ? '/placeholder-poster.png' 
     : (movie.tmdbPosterUrl || movie.posterUrl || '/placeholder-poster.png');
+
+  const handlePlayDefault = async () => {
+    if (movie.fullPath && window.cinemacore) {
+      await window.cinemacore.media.playWithSystemDefault(movie.fullPath);
+    }
+  };
+
+  const handlePlayCustom = async () => {
+    if (movie.fullPath && window.cinemacore) {
+      const settings = await window.cinemacore.settings.getPlaybackSettings();
+      if (settings.customPlayerPath) {
+        await window.cinemacore.media.playWithCustomPlayer(settings.customPlayerPath, movie.fullPath);
+      } else {
+        const result = await window.cinemacore.media.selectCustomPlayer();
+        if (!result.canceled && result.path) {
+           await window.cinemacore.settings.savePlaybackSettings({ ...settings, customPlayerPath: result.path, playbackMode: 'custom' });
+           await window.cinemacore.media.playWithCustomPlayer(result.path, movie.fullPath);
+        }
+      }
+    }
+  };
+
+  const handleToggleFavorite = async () => {
+    if (window.cinemacore) {
+      await window.cinemacore.db.toggleFavorite(movie.id);
+      onUpdate?.();
+    }
+  };
+
+  const handleToggleHidden = async () => {
+    if (window.cinemacore) {
+      await window.cinemacore.db.hideFile(movie.id);
+      onUpdate?.();
+    }
+  };
 
   return (
     <div 
@@ -43,25 +72,17 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, onClick, onDelete, 
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-300" />
         
         {/* Action Buttons - Top Right */}
-        <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
-          {onEdit && (
-            <button 
-              onClick={(e) => { e.stopPropagation(); onEdit(movie); }}
-              className="p-2 bg-black/60 backdrop-blur-md rounded-full text-white/90 hover:text-primary hover:bg-black/80 transition-colors border border-white/10"
-              title="Edit Metadata"
-            >
-              <Edit2 className="w-4 h-4" />
-            </button>
-          )}
-          {onDelete && (
-            <button 
-              onClick={(e) => { e.stopPropagation(); onDelete(movie); }}
-              className="p-2 bg-black/60 backdrop-blur-md rounded-full text-white/90 hover:text-red-500 hover:bg-black/80 transition-colors border border-white/10"
-              title="Delete"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
+        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0 z-10">
+          <CardContextMenu 
+            onPlayDefault={handlePlayDefault}
+            onPlayCustom={handlePlayCustom}
+            onToggleFavorite={handleToggleFavorite}
+            onToggleHidden={handleToggleHidden}
+            onDelete={() => onDelete?.(movie)}
+            onEdit={onEdit ? () => onEdit(movie) : undefined}
+            isFavorite={movie.isFavorite}
+            isHidden={movie.isHidden}
+          />
         </div>
 
         {/* Content - Bottom */}

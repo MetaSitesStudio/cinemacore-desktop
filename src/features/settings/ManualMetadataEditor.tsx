@@ -81,7 +81,7 @@ export const ManualMetadataEditor: React.FC<ManualMetadataEditorProps> = ({
                 type="text"
                 value={formData.title}
                 onChange={e => setFormData({...formData, title: e.target.value})}
-                className="w-full bg-background/50 border border-text/10 rounded px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                className="w-full bg-input border border-text/10 rounded px-3 py-2 text-sm focus:outline-none focus:border-primary"
                 required
               />
             </div>
@@ -91,7 +91,7 @@ export const ManualMetadataEditor: React.FC<ManualMetadataEditorProps> = ({
                 type="number"
                 value={formData.year}
                 onChange={e => setFormData({...formData, year: e.target.value})}
-                className="w-full bg-background/50 border border-text/10 rounded px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                className="w-full bg-input border border-text/10 rounded px-3 py-2 text-sm focus:outline-none focus:border-primary"
               />
             </div>
           </div>
@@ -104,7 +104,7 @@ export const ManualMetadataEditor: React.FC<ManualMetadataEditorProps> = ({
                 value={formData.rating}
                 onChange={e => setFormData({...formData, rating: e.target.value})}
                 placeholder="e.g. PG-13"
-                className="w-full bg-background/50 border border-text/10 rounded px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                className="w-full bg-input border border-text/10 rounded px-3 py-2 text-sm focus:outline-none focus:border-primary"
               />
             </div>
             <div className="space-y-1">
@@ -114,7 +114,7 @@ export const ManualMetadataEditor: React.FC<ManualMetadataEditorProps> = ({
                 value={formData.genres}
                 onChange={e => setFormData({...formData, genres: e.target.value})}
                 placeholder="Action, Drama"
-                className="w-full bg-background/50 border border-text/10 rounded px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                className="w-full bg-input border border-text/10 rounded px-3 py-2 text-sm focus:outline-none focus:border-primary"
               />
             </div>
           </div>
@@ -125,7 +125,7 @@ export const ManualMetadataEditor: React.FC<ManualMetadataEditorProps> = ({
               type="text"
               value={formData.posterUrl}
               onChange={e => setFormData({...formData, posterUrl: e.target.value})}
-              className="w-full bg-background/50 border border-text/10 rounded px-3 py-2 text-sm focus:outline-none focus:border-primary"
+              className="w-full bg-input border border-text/10 rounded px-3 py-2 text-sm focus:outline-none focus:border-primary"
             />
           </div>
 
@@ -135,7 +135,7 @@ export const ManualMetadataEditor: React.FC<ManualMetadataEditorProps> = ({
               value={formData.plot}
               onChange={e => setFormData({...formData, plot: e.target.value})}
               rows={4}
-              className="w-full bg-background/50 border border-text/10 rounded px-3 py-2 text-sm focus:outline-none focus:border-primary resize-none"
+              className="w-full bg-input border border-text/10 rounded px-3 py-2 text-sm focus:outline-none focus:border-primary resize-none"
             />
           </div>
 

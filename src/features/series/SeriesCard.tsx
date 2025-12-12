@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Series } from '@/types';
 import { Trash2, Edit2 } from 'lucide-react';
 
@@ -10,21 +10,12 @@ interface SeriesCardProps {
 }
 
 export const SeriesCard: React.FC<SeriesCardProps> = ({ series, onClick, onDelete, onEdit }) => {
-  const [broken, setBroken] = useState(false);
-
-  const getPosterSrc = (item: Series) => {
-    if (item.tmdbPosterUrl) return item.tmdbPosterUrl;
-    if (item.posterUrl) return item.posterUrl;
-    return '/placeholder-poster.png';
-  };
-
-  const src = broken ? '/placeholder-poster.png' : getPosterSrc(series);
-
-  console.log('[IMG] SeriesCard', {
-    title: series.title,
-    tmdbPosterUrl: series.tmdbPosterUrl,
-    tmdbBackdropUrl: series.tmdbBackdropUrl
-  });
+  
+  const posterSrc = series.tmdbPosterUrl
+    ? series.tmdbPosterUrl
+    : series.posterUrl
+      ? series.posterUrl
+      : '/placeholder-poster.png';
 
   return (
     <div 
@@ -35,11 +26,13 @@ export const SeriesCard: React.FC<SeriesCardProps> = ({ series, onClick, onDelet
       <div className="relative aspect-[2/3] overflow-hidden rounded-xl shadow-lg bg-surface transition-all duration-300 group-hover:shadow-2xl group-hover:scale-[1.02] ring-1 ring-white/5">
         {/* Image */}
         <img 
-          src={src} 
+          src={posterSrc} 
           alt={series.title} 
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
           loading="lazy"
-          onError={() => !broken && setBroken(true)}
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).src = '/placeholder-poster.png';
+          }}
         />
         
         {/* Gradient Overlay - Always visible at bottom for text readability */}
@@ -65,19 +58,6 @@ export const SeriesCard: React.FC<SeriesCardProps> = ({ series, onClick, onDelet
               <Trash2 className="w-4 h-4" />
             </button>
           )}
-        </div>
-
-        {/* Content - Bottom */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
-          <h3 className="text-white font-bold text-lg leading-tight line-clamp-2 mb-1 drop-shadow-md">
-            {series.title}
-          </h3>
-          <div className="flex items-center justify-between text-sm text-gray-300 font-medium">
-            <span className="bg-white/10 px-2 py-0.5 rounded text-xs backdrop-blur-sm">
-              {series.year}
-            </span>
-            {/* You could add season count here if available in the future */}
-          </div>
         </div>
       </div>
     </div>

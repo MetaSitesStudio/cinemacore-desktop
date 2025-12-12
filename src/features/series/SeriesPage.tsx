@@ -5,13 +5,22 @@ import { SeriesCard } from './SeriesCard';
 import { SeriesDetailOverlay } from './SeriesDetailOverlay';
 import { ManualMetadataEditor } from '@/features/settings/ManualMetadataEditor';
 import { DeleteConfirmationDialog } from '@/components/dialogs/DeleteConfirmationDialog';
+import { useSearch } from '@/context/SearchContext';
+import { matchesSearchQuery } from '@/domain/searchUtils';
+import { Heart } from 'lucide-react';
 
 export const SeriesPage: React.FC = () => {
   const { libraryService } = useServices();
-  const [seriesList, setSeriesList] = useState<Series[]>([]);
+  const { searchQuery } = useSearch();
   const [episodeFiles, setEpisodeFiles] = useState<MovieFile[]>([]);
   const [selectedSeries, setSelectedSeries] = useState<Series | null>(null);
   const [sortBy, setSortBy] = useState<'year' | 'title'>('year');
+
+  const [filters, setFilters] = useState({
+    favoritesOnly: false,
+    hideHidden: true,
+    genre: "all",
+  });
 
   // Editor State
   const [editingFile, setEditingFile] = useState<MovieFile | null>(null);
@@ -23,18 +32,55 @@ export const SeriesPage: React.FC = () => {
 
   const loadSeries = useCallback(async () => {
     const allFiles = await libraryService.getAllFiles();
-    
-    // Filter for episodes only
-    const episodes = allFiles.filter(f => 
-      f.mediaType === 'episode' && !f.isHidden && f.seriesTitle
-    );
-    
-    setEpisodeFiles(episodes);
+    setEpisodeFiles(allFiles);
+  }, [libraryService]);
+
+  const availableGenres = useMemo(() => {
+    const set = new Set<string>();
+    episodeFiles.forEach(f => {
+      const genres = f.metadata?.genres || [];
+      genres.forEach(g => {
+        if (typeof g === 'string') {
+          set.add(g);
+        } else if (typeof g === 'object' && (g as any).name) {
+          set.add((g as any).name);
+        }
+      });
+    });
+    return Array.from(set).sort();
+  }, [episodeFiles]);
+
+  const seriesList = useMemo(() => {
+    let filteredEpisodes = episodeFiles;
+
+    // 1. Search
+    if (searchQuery.length >= 2) {
+      filteredEpisodes = filteredEpisodes.filter(f => matchesSearchQuery(f, searchQuery));
+    }
+
+    // 2. Filters
+    filteredEpisodes = filteredEpisodes.filter(f => {
+      // Always filter for episodes on this page
+      if (f.mediaType !== 'episode') return false;
+      
+      if (filters.favoritesOnly && !f.isFavorite) return false;
+      if (filters.hideHidden && f.isHidden) return false;
+
+      if (filters.genre !== "all") {
+        const genres = f.metadata?.genres || [];
+        const names = genres.map(g => typeof g === 'string' ? g : (g as any).name).filter(Boolean);
+        if (!names.includes(filters.genre)) return false;
+      }
+
+      return true;
+    });
 
     // Group by series title
     const seriesMap = new Map<string, MovieFile[]>();
-    episodes.forEach(f => {
-      const title = f.seriesTitle!;
+    filteredEpisodes.forEach(f => {
+      const title = f.seriesTitle;
+      if (!title) return;
+
       if (!seriesMap.has(title)) {
         seriesMap.set(title, []);
       }
@@ -42,7 +88,7 @@ export const SeriesPage: React.FC = () => {
     });
 
     // Convert to Series objects
-    const mappedSeries: Series[] = Array.from(seriesMap.entries()).map(([title, files]) => {
+    return Array.from(seriesMap.entries()).map(([title, files]) => {
       // Use metadata from the first file that has it, or fallback
       const metaFile = files.find(f => f.metadata) || files[0];
       
@@ -57,15 +103,15 @@ export const SeriesPage: React.FC = () => {
         description: metaFile.metadata?.plot || `${files.length} episodes available`,
         posterUrl: fileWithPoster?.tmdbPosterUrl || metaFile.metadata?.posterUrl || '',
         backdropUrl: fileWithBackdrop?.tmdbBackdropUrl || '',
+        tmdbPosterUrl: fileWithPoster?.tmdbPosterUrl || undefined,
+        tmdbBackdropUrl: fileWithBackdrop?.tmdbBackdropUrl || undefined,
         rating: parseFloat(metaFile.metadata?.rating || '0') || 0,
         seasons: new Set(files.map(f => f.seasonNumber).filter(Boolean)).size,
         genres: metaFile.metadata?.genres || [],
         isWatched: false
       };
     });
-
-    setSeriesList(mappedSeries);
-  }, [libraryService]);
+  }, [episodeFiles, searchQuery, filters]);
 
   useEffect(() => {
     loadSeries();
@@ -168,7 +214,39 @@ export const SeriesPage: React.FC = () => {
           </p>
         </div>
         
-        <div className="flex items-center gap-4 bg-surface/50 p-1.5 rounded-lg backdrop-blur-sm border border-white/5">
+        <div className="flex items-center gap-4 bg-[var(--input-bg)] p-1.5 rounded-lg backdrop-blur-sm border border-white/5">
+          {/* Favorites Toggle */}
+          <button
+            onClick={() => setFilters(prev => ({ ...prev, favoritesOnly: !prev.favoritesOnly }))}
+            className={`
+              flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors
+              ${filters.favoritesOnly 
+                ? 'bg-amber-500 text-black' 
+                : 'text-text/80 hover:text-primary hover:bg-white/5'}
+            `}
+            title="Show Favorites Only"
+          >
+            <Heart size={16} className={filters.favoritesOnly ? "fill-black" : ""} />
+            <span className="hidden sm:inline">Favorites</span>
+          </button>
+
+          <div className="w-px h-6 bg-white/10" />
+
+          {/* Genre Dropdown */}
+          <select 
+            className="bg-transparent text-text/80 border-none outline-none px-3 py-1.5 text-sm font-medium cursor-pointer hover:text-primary transition-colors max-w-[150px]"
+            value={filters.genre}
+            onChange={(e) => setFilters(prev => ({ ...prev, genre: e.target.value }))}
+          >
+            <option value="all" className="bg-surface text-text">All Genres</option>
+            {availableGenres.map(g => (
+              <option key={g} value={g} className="bg-surface text-text">{g}</option>
+            ))}
+          </select>
+
+          <div className="w-px h-6 bg-white/10" />
+
+          {/* Sort Dropdown */}
           <select 
             className="bg-transparent text-text/80 border-none outline-none px-3 py-1.5 text-sm font-medium cursor-pointer hover:text-primary transition-colors"
             value={sortBy}
@@ -200,6 +278,7 @@ export const SeriesPage: React.FC = () => {
         episodes={selectedEpisodes}
         seriesMetadata={selectedSeriesMetadata}
         posterUrl={selectedSeriesPosterUrl}
+        backdropUrl={selectedSeries?.tmdbBackdropUrl || selectedSeries?.backdropUrl}
         onDeleteEpisode={handleDeleteEpisode}
         onEditEpisode={handleEditEpisode}
         onDeleteSeries={() => selectedSeries && handleDeleteSeries(selectedSeries)}

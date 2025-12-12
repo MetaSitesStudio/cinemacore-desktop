@@ -22,11 +22,12 @@ export const Hero: React.FC<HeroProps> = ({ movie, onDetailsClick }) => {
     }
   };
 
-  console.log('[IMG] Hero movie artwork', {
+  console.log('[Hero] movie data:', {
     title: movie.title,
     posterUrl: movie.posterUrl,
     tmdbPosterUrl: movie.tmdbPosterUrl,
     tmdbBackdropUrl: movie.tmdbBackdropUrl,
+    backdropUrl: movie.backdropUrl
   });
 
   const bg = movie.tmdbBackdropUrl
@@ -52,14 +53,14 @@ export const Hero: React.FC<HeroProps> = ({ movie, onDetailsClick }) => {
       </div>
 
       {/* Content */}
-      <div className="relative h-full flex items-center px-4 md:px-12 pt-20">
+      <div className="relative h-full flex items-end px-4 md:px-12 pb-36 md:pb-44">
         <div className="max-w-2xl space-y-6">
-          <h1 className="text-5xl md:text-7xl font-bold drop-shadow-lg">
+          <h1 className="text-5xl md:text-7xl font-bold drop-shadow-lg leading-tight">
             {movie.title}
           </h1>
           
           <div className="flex items-center gap-4 text-lg text-text/80">
-            <span className="text-primary font-bold">{movie.rating} Match</span>
+            {movie.rating > 0 && <span className="text-primary font-bold">★ {movie.rating}</span>}
             <span>{movie.year}</span>
             <span>{Math.floor(movie.runtime / 60)}h {movie.runtime % 60}m</span>
             <span className="border border-text/50 px-2 py-0.5 text-sm rounded">HD</span>

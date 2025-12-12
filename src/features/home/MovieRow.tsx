@@ -9,10 +9,13 @@ interface MovieRowProps {
   onMovieClick: (movie: Movie) => void;
   onEdit?: (movie: Movie) => void;
   onDelete?: (movie: Movie) => void;
+  onUpdate?: () => void;
 }
 
-export const MovieRow: React.FC<MovieRowProps> = ({ title, movies, onMovieClick, onEdit, onDelete }) => {
+export const MovieRow: React.FC<MovieRowProps> = ({ title, movies, onMovieClick, onEdit, onDelete, onUpdate }) => {
   const rowRef = useRef<HTMLDivElement>(null);
+
+  if (!movies || movies.length === 0) return null;
 
   const scroll = (direction: 'left' | 'right') => {
     if (rowRef.current) {
@@ -50,6 +53,7 @@ export const MovieRow: React.FC<MovieRowProps> = ({ title, movies, onMovieClick,
                 onClick={onMovieClick} 
                 onEdit={onEdit}
                 onDelete={onDelete}
+                onUpdate={onUpdate}
               />
             </div>
           ))}

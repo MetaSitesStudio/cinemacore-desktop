@@ -14,6 +14,9 @@ export interface Movie {
   isWatched?: boolean;
   isInContinueWatching?: boolean;
   isRecentlyAdded?: boolean;
+  fullPath?: string;
+  isFavorite?: boolean;
+  isHidden?: boolean;
 }
 
 export type MediaType = "movie" | "episode";
@@ -55,9 +58,11 @@ export interface MovieFile {
     runtimeMinutes: number | null;
     imdbId: string | null;
     rating: string | null;
+    cast?: Array<{ id: number; name: string; character: string; profilePath: string | null }>;
+    crew?: Array<{ id: number; name: string; job: string; department: string; profilePath: string | null }>;
   };
   
-  metadataSource?: "omdb" | "manual";
+  metadataSource?: "omdb" | "manual" | "tmdb";
 
   // TMDB Artwork
   tmdbBackdropUrl?: string | null;

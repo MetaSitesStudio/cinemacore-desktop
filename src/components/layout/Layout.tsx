@@ -1,16 +1,17 @@
 import React from 'react';
 import { Navbar } from './Navbar';
-import { useSearch } from '@/context/SearchContext';
-import { SearchResults } from '@/features/search/SearchResults';
+import { useTheme } from '@/context/ThemeContext';
+import { ChristmasSnowOverlay } from '@/components/ChristmasSnowOverlay';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isActive } = useSearch();
+  const { currentTheme } = useTheme();
 
   return (
-    <div className="min-h-screen bg-background text-text font-sans">
+    <div className="min-h-screen bg-background text-text font-sans relative overflow-x-hidden">
+      <ChristmasSnowOverlay active={currentTheme === 'christmas'} />
       <Navbar />
       <main>
-        {isActive ? <SearchResults /> : children}
+        {children}
       </main>
     </div>
   );

@@ -1,14 +1,17 @@
-import React, { createContext, useContext, ReactNode } from 'react';
-import { useLibrarySearch } from '@/hooks/useLibrarySearch';
+import { createContext, useContext, useState, ReactNode } from 'react';
 
-type UseLibrarySearchReturn = ReturnType<typeof useLibrarySearch>;
+interface SearchContextType {
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+}
 
-const SearchContext = createContext<UseLibrarySearchReturn | null>(null);
+const SearchContext = createContext<SearchContextType | undefined>(undefined);
 
-export const SearchProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const search = useLibrarySearch();
+export const SearchProvider = ({ children }: { children: ReactNode }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+
   return (
-    <SearchContext.Provider value={search}>
+    <SearchContext.Provider value={{ searchQuery, setSearchQuery }}>
       {children}
     </SearchContext.Provider>
   );
@@ -16,7 +19,7 @@ export const SearchProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
 export const useSearch = () => {
   const context = useContext(SearchContext);
-  if (!context) {
+  if (context === undefined) {
     throw new Error('useSearch must be used within a SearchProvider');
   }
   return context;

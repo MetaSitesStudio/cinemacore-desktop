@@ -107,7 +107,7 @@ export const MovieDetailOverlay: React.FC<MovieDetailOverlayProps> = ({ movie, o
           onClick={onClose}
         />
         
-        <div className="relative w-full max-w-4xl bg-surface rounded-lg shadow-2xl overflow-hidden max-h-full overflow-y-auto animate-in fade-in zoom-in duration-200">
+        <div className="relative w-full max-w-4xl bg-surface rounded-lg shadow-2xl overflow-hidden max-h-full overflow-y-auto detail-overlay-scroll animate-in fade-in zoom-in duration-200">
           <button 
             onClick={onClose}
             className="absolute top-4 right-4 z-10 p-2 bg-background/50 rounded-full hover:bg-text/20 transition-colors"
@@ -172,7 +172,6 @@ export const MovieDetailOverlay: React.FC<MovieDetailOverlayProps> = ({ movie, o
           <div className="p-8 grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-8">
             <div className="space-y-6">
               <div className="flex items-center gap-4 text-sm text-text/60">
-                <span className="text-primary font-bold text-base">{movie.rating} Match</span>
                 <span>{movie.year}</span>
                 <span>{Math.floor(movie.runtime / 60)}h {movie.runtime % 60}m</span>
                 <span className="border border-text/30 px-1.5 rounded text-xs">HD</span>
@@ -188,6 +187,22 @@ export const MovieDetailOverlay: React.FC<MovieDetailOverlayProps> = ({ movie, o
                 <span className="block text-text/50 mb-1">Genres:</span>
                 <span className="text-text">{movie.genres.join(', ')}</span>
               </div>
+              {/* @ts-ignore */}
+              {movie.director && (
+                <div>
+                  <span className="block text-text/50 mb-1">Director:</span>
+                  {/* @ts-ignore */}
+                  <span className="text-text">{movie.director}</span>
+                </div>
+              )}
+              {/* @ts-ignore */}
+              {movie.cast && movie.cast.length > 0 && (
+                <div>
+                  <span className="block text-text/50 mb-1">Cast:</span>
+                  {/* @ts-ignore */}
+                  <span className="text-text">{movie.cast.map(c => c.name).join(', ')}</span>
+                </div>
+              )}
               <div>
                 <span className="block text-text/50 mb-1">Original Language:</span>
                 <span className="text-text">English</span>

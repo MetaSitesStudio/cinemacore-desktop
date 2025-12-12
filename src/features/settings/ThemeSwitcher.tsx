@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTheme, Theme } from '@/context/ThemeContext';
 import { Button } from '@/components/ui/Button';
-import { Moon, Sun, Umbrella } from 'lucide-react';
+import { Moon, Sun, Umbrella, Gift, Clapperboard, Zap } from 'lucide-react';
 
 export const ThemeSwitcher: React.FC = () => {
   const { currentTheme, setTheme, availableThemes } = useTheme();
@@ -11,13 +11,16 @@ export const ThemeSwitcher: React.FC = () => {
       case 'dark': return <Moon className="w-4 h-4" />;
       case 'light': return <Sun className="w-4 h-4" />;
       case 'summer': return <Umbrella className="w-4 h-4" />;
+      case 'christmas': return <Gift className="w-4 h-4" />;
+      case 'cinematic': return <Clapperboard className="w-4 h-4" />;
+      case 'sparky': return <Zap className="w-4 h-4" />;
     }
   };
 
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold text-text">Appearance</h3>
-      <div className="flex gap-4">
+      <div className="flex gap-4 flex-wrap">
         {availableThemes.map((theme) => (
           <Button
             key={theme}
@@ -26,7 +29,7 @@ export const ThemeSwitcher: React.FC = () => {
             className="capitalize gap-2"
           >
             {getIcon(theme)}
-            {theme}
+            {theme === 'christmas' ? 'Christmas (Holiday)' : theme}
           </Button>
         ))}
       </div>

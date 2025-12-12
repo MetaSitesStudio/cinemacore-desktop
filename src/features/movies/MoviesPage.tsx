@@ -1,16 +1,26 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useServices } from '@/services/ServiceContext';
 import { Movie, MovieFile } from '@/types';
 import { MovieCard } from '@/features/home/MovieCard';
 import { MovieDetailOverlay } from '@/features/details/MovieDetailOverlay';
 import { ManualMetadataEditor } from '@/features/settings/ManualMetadataEditor';
 import { DeleteConfirmationDialog } from '@/components/dialogs/DeleteConfirmationDialog';
+import { useSearch } from '@/context/SearchContext';
+import { matchesSearchQuery } from '@/domain/searchUtils';
+import { Heart } from 'lucide-react';
 
 export const MoviesPage: React.FC = () => {
   const { libraryService } = useServices();
-  const [movies, setMovies] = useState<Movie[]>([]);
+  const { searchQuery } = useSearch();
+  const [rawFiles, setRawFiles] = useState<MovieFile[]>([]);
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   const [sortBy, setSortBy] = useState<'year' | 'title'>('year');
+
+  const [filters, setFilters] = useState({
+    favoritesOnly: false,
+    hideHidden: true,
+    genre: "all",
+  });
   
   // Editor State
   const [editingFile, setEditingFile] = useState<MovieFile | null>(null);
@@ -22,13 +32,55 @@ export const MoviesPage: React.FC = () => {
 
   const loadMovies = useCallback(async () => {
     const allFiles = await libraryService.getAllFiles();
-    
-    // Filter for movies only and map to Movie type
-    const movieFiles = allFiles.filter(f => 
-      (f.mediaType === 'movie' || !f.mediaType) && !f.isHidden
-    );
+    setRawFiles(allFiles);
+  }, [libraryService]);
 
-    const mappedMovies: Movie[] = movieFiles.map(f => ({
+  useEffect(() => {
+    loadMovies();
+  }, [loadMovies]);
+
+  const availableGenres = useMemo(() => {
+    const set = new Set<string>();
+    rawFiles.forEach(f => {
+      const genres = f.metadata?.genres || [];
+      genres.forEach(g => {
+        if (typeof g === 'string') {
+          set.add(g);
+        } else if (typeof g === 'object' && (g as any).name) {
+          set.add((g as any).name);
+        }
+      });
+    });
+    return Array.from(set).sort();
+  }, [rawFiles]);
+
+  const movies = useMemo(() => {
+    let filtered = rawFiles;
+
+    // 1. Search
+    if (searchQuery.length >= 2) {
+      filtered = filtered.filter(f => matchesSearchQuery(f, searchQuery));
+    }
+
+    // 2. Filters
+    filtered = filtered.filter(f => {
+      // Always filter for movies on this page
+      if (f.mediaType && f.mediaType !== 'movie') return false;
+      
+      if (filters.favoritesOnly && !f.isFavorite) return false;
+      if (filters.hideHidden && f.isHidden) return false;
+
+      if (filters.genre !== "all") {
+        const genres = f.metadata?.genres || [];
+        // Handle both string[] and {name: string}[] just in case
+        const names = genres.map(g => typeof g === 'string' ? g : (g as any).name).filter(Boolean);
+        if (!names.includes(filters.genre)) return false;
+      }
+
+      return true;
+    });
+    
+    return filtered.map(f => ({
       id: f.id,
       title: f.metadata?.title || f.guessedTitle || f.fileName,
       year: f.metadata?.year || f.guessedYear || 0,
@@ -38,19 +90,15 @@ export const MoviesPage: React.FC = () => {
       rating: parseFloat(f.metadata?.rating || '0') || 0,
       runtime: f.metadata?.runtimeMinutes || 0,
       genres: f.metadata?.genres || [],
-      isWatched: false
+      isWatched: false,
+      fullPath: f.fullPath,
+      isFavorite: f.isFavorite,
+      isHidden: f.isHidden
     }));
-
-    setMovies(mappedMovies);
-  }, [libraryService]);
-
-  useEffect(() => {
-    loadMovies();
-  }, [loadMovies]);
+  }, [rawFiles, searchQuery, filters]);
 
   const handleEdit = async (movie: Movie) => {
-    const allFiles = await libraryService.getAllFiles();
-    const file = allFiles.find(f => f.id === movie.id);
+    const file = rawFiles.find(f => f.id === movie.id);
     if (file) {
       setEditingFile(file);
       setIsEditorOpen(true);
@@ -64,8 +112,7 @@ export const MoviesPage: React.FC = () => {
 
   const handleConfirmLibraryDelete = async () => {
     if (!movieToDelete) return;
-    const allFiles = await libraryService.getAllFiles();
-    const file = allFiles.find(f => f.id === movieToDelete.id);
+    const file = rawFiles.find(f => f.id === movieToDelete.id);
     if (file) {
       await libraryService.hideFile(file.id);
       loadMovies();
@@ -76,8 +123,7 @@ export const MoviesPage: React.FC = () => {
 
   const handleConfirmDiskDelete = async () => {
     if (!movieToDelete) return;
-    const allFiles = await libraryService.getAllFiles();
-    const file = allFiles.find(f => f.id === movieToDelete.id);
+    const file = rawFiles.find(f => f.id === movieToDelete.id);
     if (file) {
       await libraryService.deleteFileFromDisk(file);
       loadMovies();
@@ -104,7 +150,39 @@ export const MoviesPage: React.FC = () => {
           </p>
         </div>
         
-        <div className="flex items-center gap-4 bg-surface/50 p-1.5 rounded-lg backdrop-blur-sm border border-white/5">
+        <div className="flex items-center gap-4 bg-[var(--input-bg)] p-1.5 rounded-lg backdrop-blur-sm border border-white/5">
+          {/* Favorites Toggle */}
+          <button
+            onClick={() => setFilters(prev => ({ ...prev, favoritesOnly: !prev.favoritesOnly }))}
+            className={`
+              flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors
+              ${filters.favoritesOnly 
+                ? 'bg-amber-500 text-black' 
+                : 'text-text/80 hover:text-primary hover:bg-white/5'}
+            `}
+            title="Show Favorites Only"
+          >
+            <Heart size={16} className={filters.favoritesOnly ? "fill-black" : ""} />
+            <span className="hidden sm:inline">Favorites</span>
+          </button>
+
+          <div className="w-px h-6 bg-white/10" />
+
+          {/* Genre Dropdown */}
+          <select 
+            className="bg-transparent text-text/80 border-none outline-none px-3 py-1.5 text-sm font-medium cursor-pointer hover:text-primary transition-colors max-w-[150px]"
+            value={filters.genre}
+            onChange={(e) => setFilters(prev => ({ ...prev, genre: e.target.value }))}
+          >
+            <option value="all" className="bg-surface text-text">All Genres</option>
+            {availableGenres.map(g => (
+              <option key={g} value={g} className="bg-surface text-text">{g}</option>
+            ))}
+          </select>
+
+          <div className="w-px h-6 bg-white/10" />
+
+          {/* Sort Dropdown */}
           <select 
             className="bg-transparent text-text/80 border-none outline-none px-3 py-1.5 text-sm font-medium cursor-pointer hover:text-primary transition-colors"
             value={sortBy}
@@ -125,6 +203,7 @@ export const MoviesPage: React.FC = () => {
             onClick={setSelectedMovie} 
             onEdit={handleEdit}
             onDelete={handleDelete}
+            onUpdate={loadMovies}
           />
         ))}
       </div>

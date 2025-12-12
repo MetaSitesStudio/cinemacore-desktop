@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-export type Theme = 'dark' | 'light' | 'summer';
+export type Theme = 'dark' | 'light' | 'summer' | 'christmas' | 'cinematic' | 'sparky';
 
 interface ThemeContextType {
   currentTheme: Theme;
@@ -16,11 +16,11 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return (saved as Theme) || 'dark';
   });
 
-  const availableThemes: Theme[] = ['dark', 'light', 'summer'];
+  const availableThemes: Theme[] = ['dark', 'light', 'summer', 'christmas', 'cinematic', 'sparky'];
 
   useEffect(() => {
     const root = window.document.documentElement;
-    root.classList.remove('theme-light', 'theme-summer');
+    root.classList.remove('theme-light', 'theme-summer', 'theme-christmas', 'theme-cinematic', 'theme-sparky');
     
     if (currentTheme !== 'dark') {
       root.classList.add(`theme-${currentTheme}`);

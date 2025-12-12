@@ -132,10 +132,25 @@ export const LibraryScannerSection: React.FC = () => {
             Scan your configured folders for new content.
           </p>
         </div>
-        <Button onClick={handleStartScan} disabled={scanIsRunning || isMetadataScanning}>
-            <FolderSearch className="w-4 h-4 mr-2" />
-            Scan Library
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="secondary" 
+            onClick={async () => {
+              if (confirm("Are you sure you want to clear the entire library database? This will remove all metadata and file records. Your folders will be kept.")) {
+                // @ts-ignore
+                await window.cinemacore.library.reset();
+                alert("Library cleared. Please run a scan to repopulate.");
+              }
+            }}
+            disabled={scanIsRunning || isMetadataScanning}
+          >
+            Reset Library
+          </Button>
+          <Button onClick={handleStartScan} disabled={scanIsRunning || isMetadataScanning}>
+              <FolderSearch className="w-4 h-4 mr-2" />
+              Scan Library
+          </Button>
+        </div>
       </div>
 
       <ScanProgressModal

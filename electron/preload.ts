@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('cinemacore', {
     removeFolder: (folderId: string, deleteFiles: boolean) => 
       ipcRenderer.invoke("cinemacore:library:removeFolder", folderId, deleteFiles),
     rescanFolder: (folderId: string) => ipcRenderer.invoke("cinemacore:library:rescanFolder", folderId),
+    reset: () => ipcRenderer.invoke("cinemacore:library:reset"),
     getDuplicates: () => ipcRenderer.invoke("cinemacore:library:getDuplicates"),
     removeFile: (fileId: string) => ipcRenderer.invoke("cinemacore:library:removeFile", fileId),
     searchMedia: (payload: any) => ipcRenderer.invoke("cinemacore:library:searchMedia", payload),

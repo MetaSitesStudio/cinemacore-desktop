@@ -99,7 +99,7 @@ export const SettingsPage: React.FC = () => {
                   value={tmdbKey}
                   onChange={(e) => setTmdbKey(e.target.value)}
                   placeholder="Enter TMDB API Key"
-                  className="flex-1 bg-background border border-text/20 rounded px-3 py-1.5 text-sm text-text focus:outline-none focus:border-primary"
+                  className="flex-1 bg-input border border-text/20 rounded px-3 py-1.5 text-sm text-text focus:outline-none focus:border-primary"
                 />
                 <Button size="sm" onClick={handleSaveTmdbKey}>Save</Button>
               </div>
@@ -117,7 +117,7 @@ export const SettingsPage: React.FC = () => {
                   value={omdbKey}
                   onChange={(e) => setOmdbKey(e.target.value)}
                   placeholder="Enter OMDb API Key"
-                  className="flex-1 bg-background border border-text/20 rounded px-3 py-1.5 text-sm text-text focus:outline-none focus:border-primary"
+                  className="flex-1 bg-input border border-text/20 rounded px-3 py-1.5 text-sm text-text focus:outline-none focus:border-primary"
                 />
                 <Button size="sm" onClick={handleSaveOmdbKey}>Save</Button>
               </div>
