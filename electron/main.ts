@@ -8,6 +8,9 @@ import { parseMovieFilename } from '../src/utils/filenameParser';
 import { ScanJob, MovieFile, PlaybackSettings, LibraryFolder, DuplicateGroup } from '../src/types';
 import { fetchTmdbArtworkForImdbId } from './services/tmdbArtworkService';
 import { fetchTmdbMetadata } from './services/tmdbMetadataService';
+import { startHomeServer, stopHomeServer, getCurrentPairingCode } from './homeServer';
+
+const isPro = true;
 
 let mainWindow: BrowserWindow | null = null;
 let db: Database.Database | null = null;
@@ -502,6 +505,66 @@ ipcMain.handle("cinemacore:getSetting", (_event, key: string) => {
   return row ? row.value : null;
 });
 
+ipcMain.handle("cinemacore:trailer:get", async (_event, id: string) => {
+  if (!db) return { ok: false, error: "Database not initialized" };
+  
+  try {
+    const row = db.prepare("SELECT metadata, mediaType FROM movie_files WHERE id = ?").get(id) as any;
+    if (!row) return { ok: false, error: "Item not found" };
+
+    const apiKey = getTmdbApiKey();
+    if (!apiKey) return { ok: false, error: "TMDB key missing" };
+
+    let metadata: any = {};
+    try { metadata = JSON.parse(row.metadata); } catch {}
+    
+    const tmdbId = metadata.tmdbId || metadata.id || (metadata.tmdb && metadata.tmdb.id);
+    
+    if (!tmdbId) return { ok: false, error: "NO_TMDB_ID" };
+
+    // For now, only support movies or if we can figure out TV support easily
+    // The prompt says "For episodes/series: use the closest supported approach"
+    // But main app overlay is mostly MovieDetailOverlay. 
+    // If mediaType is episode, we might need series ID. 
+    // For simplicity and "Minimal diffs", let's stick to what we know works or fail gracefully.
+    
+    let endpoint = `movie/${tmdbId}`;
+    if (row.mediaType === 'episode' || row.mediaType === 'series') {
+       // If we have a TV ID, we can try tv/{id}/videos
+       // But often metadata.id on an episode is the episode ID, not show ID.
+       // If metadata has 'seriesId' or similar?
+       // Let's try to use the ID we found. If it fails, it fails.
+       endpoint = `tv/${tmdbId}`;
+    }
+
+    const tmdbUrl = `https://api.themoviedb.org/3/${endpoint}/videos?api_key=${apiKey}`;
+    const tmdbRes = await fetch(tmdbUrl);
+    
+    if (!tmdbRes.ok) return { ok: false, error: "TMDB_ERROR" };
+
+    const data = await tmdbRes.json();
+    const results = data.results || [];
+    const youtubeVideos = results.filter((v: any) => v.site === 'YouTube');
+    
+    if (youtubeVideos.length === 0) return { ok: false, error: "NO_TRAILER" };
+
+    const best = youtubeVideos.sort((a: any, b: any) => {
+        const typeScore = (v: any) => v.type === 'Trailer' ? 2 : (v.type === 'Teaser' ? 1 : 0);
+        const officialScore = (v: any) => v.official ? 1 : 0;
+        return (typeScore(b) * 10 + officialScore(b)) - (typeScore(a) * 10 + officialScore(a));
+    })[0];
+
+    if (best) {
+        return { ok: true, youtubeKey: best.key, name: best.name };
+    } else {
+        return { ok: false, error: "NO_TRAILER" };
+    }
+  } catch (e) {
+    console.error("Trailer IPC error:", e);
+    return { ok: false, error: "Internal Error" };
+  }
+});
+
 // --- Library Management IPC Handlers ---
 
 ipcMain.handle("cinemacore:library:getFolders", () => {
@@ -943,6 +1006,10 @@ ipcMain.handle("cinemacore:library:getDuplicates", () => {
   return result;
 });
 
+ipcMain.handle("cinemacore:getPairingCode", () => {
+  return getCurrentPairingCode();
+});
+
 ipcMain.handle("cinemacore:library:searchMedia", async (_, payload: any) => {
   if (!db) throw new Error("Database not initialized");
   
@@ -1046,7 +1113,14 @@ const createWindow = () => {
 
 app.on('ready', () => {
   initDatabase();
+  if (isPro && db) {
+    startHomeServer(db);
+  }
   createWindow();
+});
+
+app.on('will-quit', () => {
+  stopHomeServer();
 });
 
 app.on('window-all-closed', () => {

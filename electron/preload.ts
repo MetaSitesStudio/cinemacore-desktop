@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('cinemacore', {
       ipcRenderer.invoke("cinemacore:playWithSystemDefaultPlayer", filePath),
     playWithCustomPlayer: (playerPath: string, filePath: string) =>
       ipcRenderer.invoke("cinemacore:playWithCustomPlayer", playerPath, filePath),
+    getTrailer: (id: string) => ipcRenderer.invoke("cinemacore:trailer:get", id),
   },
   settings: {
     getPlaybackSettings: () => ipcRenderer.invoke("cinemacore:getPlaybackSettings"),
@@ -22,6 +23,7 @@ contextBridge.exposeInMainWorld('cinemacore', {
       ipcRenderer.invoke("cinemacore:savePlaybackSettings", settings),
     saveSetting: (key: string, value: string) => ipcRenderer.invoke("cinemacore:saveSetting", key, value),
     getSetting: (key: string) => ipcRenderer.invoke("cinemacore:getSetting", key),
+    getPairingCode: () => ipcRenderer.invoke("cinemacore:getPairingCode"),
   },
   library: {
     getFolders: () => ipcRenderer.invoke("cinemacore:library:getFolders"),

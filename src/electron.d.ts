@@ -13,12 +13,14 @@ export interface IElectronAPI {
     selectCustomPlayer: () => Promise<{ canceled: boolean; path?: string; label?: string }>;
     playWithSystemDefault: (filePath: string) => Promise<void>;
     playWithCustomPlayer: (playerPath: string, filePath: string) => Promise<void>;
+    getTrailer: (id: string) => Promise<{ ok: boolean; youtubeKey?: string; name?: string; error?: string }>;
   };
   settings: {
     getPlaybackSettings: () => Promise<PlaybackSettings>;
     savePlaybackSettings: (settings: PlaybackSettings) => Promise<void>;
     saveSetting: (key: string, value: string) => Promise<void>;
     getSetting: (key: string) => Promise<string | null>;
+    getPairingCode: () => Promise<string>;
   };
   library: {
     getFolders: () => Promise<LibraryFolder[]>;

@@ -4,11 +4,13 @@ import { LibraryScannerSection } from './LibraryScannerSection';
 import { LibraryFoldersSection } from './LibraryFoldersSection';
 import { DuplicatesSection } from './DuplicatesSection';
 import { PlaybackSettingsSection } from './PlaybackSettingsSection';
+import { ScreensaverSection } from './ScreensaverSection';
 import { Button } from '@/components/ui/Button';
 
 export const SettingsPage: React.FC = () => {
   const [tmdbKey, setTmdbKey] = useState('');
   const [omdbKey, setOmdbKey] = useState('');
+  const [pairingCode, setPairingCode] = useState('');
 
   useEffect(() => {
     // Load TMDB Key from Backend
@@ -16,6 +18,15 @@ export const SettingsPage: React.FC = () => {
       window.cinemacore.settings.getSetting('tmdbApiKey').then((key) => {
         if (key) setTmdbKey(key);
       });
+      
+      // Poll for pairing code
+      const fetchCode = async () => {
+        const code = await window.cinemacore.settings.getPairingCode();
+        setPairingCode(code);
+      };
+      fetchCode();
+      const interval = setInterval(fetchCode, 5000);
+      return () => clearInterval(interval);
     } else {
       // Fallback for dev/mock
       const savedTmdbKey = localStorage.getItem('cinemacore-tmdb-api-key');
@@ -79,7 +90,26 @@ export const SettingsPage: React.FC = () => {
         </section>
 
         <section className="bg-surface p-6 rounded-lg shadow-lg">
+          <ScreensaverSection />
+        </section>
+
+        <section className="bg-surface p-6 rounded-lg shadow-lg">
           <LibraryScannerSection />
+        </section>
+
+        <section className="bg-surface p-6 rounded-lg shadow-lg">
+          <h3 className="text-lg font-semibold mb-4">Home Server</h3>
+          <div className="bg-background/50 p-4 rounded-lg border border-white/5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-medium text-text">Pairing Code</h4>
+                <p className="text-xs text-text/60 mt-1">Enter this code in CinemaCore Remote to pair.</p>
+              </div>
+              <div className="text-2xl font-mono font-bold tracking-widest text-primary">
+                {pairingCode || "----"}
+              </div>
+            </div>
+          </div>
         </section>
 
         {/* Row 3: Metadata & About */}

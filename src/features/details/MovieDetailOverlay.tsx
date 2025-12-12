@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Play, Check, Trash2, Edit2 } from 'lucide-react';
+import { X, Play, Check, Trash2, Edit2, Film } from 'lucide-react';
 import { Movie, MovieFile } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { useServices } from '@/services/ServiceContext';
@@ -29,9 +29,17 @@ export const MovieDetailOverlay: React.FC<MovieDetailOverlayProps> = ({ movie, o
   const [tmdbBackdropFailed, setTmdbBackdropFailed] = useState(false);
   const [showFallback, setShowFallback] = useState(false);
 
+  // Trailer State
+  const [showTrailer, setShowTrailer] = useState(false);
+  const [trailerKey, setTrailerKey] = useState<string | null>(null);
+  const [trailerError, setTrailerError] = useState<string | null>(null);
+  const [loadingTrailer, setLoadingTrailer] = useState(false);
+
   useEffect(() => {
     setTmdbBackdropFailed(false);
     setShowFallback(false);
+    setTrailerKey(null);
+    setTrailerError(null);
   }, [movie?.id]);
 
   if (!movie) return null;
@@ -43,6 +51,33 @@ export const MovieDetailOverlay: React.FC<MovieDetailOverlayProps> = ({ movie, o
   const getFile = async () => {
     const allFiles = await libraryService.getAllFiles();
     return allFiles.find(f => f.id === movie.id);
+  };
+
+  const handleWatchTrailer = async () => {
+    if (!window.cinemacore) {
+      setTrailerError("Not supported in web mode");
+      return;
+    }
+    
+    setLoadingTrailer(true);
+    setTrailerError(null);
+    
+    try {
+      const res = await window.cinemacore.media.getTrailer(movie.id);
+      if (res.ok && res.youtubeKey) {
+        setTrailerKey(res.youtubeKey);
+        setShowTrailer(true);
+      } else {
+        setTrailerError(res.error === "NO_TRAILER" ? "No trailer found" : "Error loading trailer");
+        // Auto clear error after 3s
+        setTimeout(() => setTrailerError(null), 3000);
+      }
+    } catch (e) {
+      console.error(e);
+      setTrailerError("Failed to load trailer");
+    } finally {
+      setLoadingTrailer(false);
+    }
   };
 
   const handlePlay = async () => {
@@ -152,6 +187,18 @@ export const MovieDetailOverlay: React.FC<MovieDetailOverlayProps> = ({ movie, o
                 <Button className="gap-2" onClick={handlePlay}>
                   <Play className="w-5 h-5 fill-current" /> Play
                 </Button>
+                <Button 
+                  variant="secondary" 
+                  className="gap-2" 
+                  onClick={handleWatchTrailer}
+                  disabled={loadingTrailer}
+                >
+                  <Film className="w-5 h-5" /> 
+                  {loadingTrailer ? "Loading..." : "Trailer"}
+                </Button>
+                {trailerError && (
+                   <span className="text-red-500 text-sm self-center animate-pulse">{trailerError}</span>
+                )}
                 <Button variant="secondary" className="gap-2">
                   <Check className="w-5 h-5" /> Mark as Watched
                 </Button>
@@ -229,6 +276,26 @@ export const MovieDetailOverlay: React.FC<MovieDetailOverlayProps> = ({ movie, o
         onConfirmLibraryOnly={handleConfirmLibraryDelete}
         onConfirmDiskDelete={handleConfirmDiskDelete}
       />
+
+      {/* Trailer Modal */}
+      {showTrailer && trailerKey && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-4 animate-in fade-in duration-200">
+          <div className="relative w-full max-w-5xl aspect-video bg-black rounded-xl overflow-hidden shadow-2xl">
+            <button 
+              onClick={() => setShowTrailer(false)}
+              className="absolute top-4 right-4 z-10 p-2 bg-black/50 hover:bg-black/80 text-white rounded-full transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <iframe 
+              src={`https://www.youtube.com/embed/${trailerKey}?playsinline=1&rel=0&modestbranding=1`}
+              className="w-full h-full"
+              allowFullScreen
+              title="Trailer"
+            />
+          </div>
+        </div>
+      )}
     </>
   );
 };
