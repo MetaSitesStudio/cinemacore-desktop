@@ -29,7 +29,7 @@ export const PosterCard: React.FC<PosterCardProps> = ({ item, onClick }) => (
     )}
     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-60 group-hover:opacity-80" />
     <div className="absolute bottom-0 left-0 right-0 p-3">
-      <h3 className="text-white text-sm font-bold line-clamp-2 leading-tight">{item.title}</h3>
+      {/* Title removed as it is already on the poster */}
       {item.year && <p className="text-xs text-gray-400 mt-1">{item.year}</p>}
     </div>
   </div>

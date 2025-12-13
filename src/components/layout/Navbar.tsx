@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Search, Bell, User, X } from 'lucide-react';
-import logo from '@/assets/logo.png';
+import { Search, Bell, User, X, Film } from 'lucide-react';
+import logo from '@/assets/logo.svg';
 import { useSearch } from '@/context/SearchContext';
 import { useTheme } from '@/context/ThemeContext';
 
 export const Navbar: React.FC = () => {
   const [isScrolled, setIsScrolled] = useState(false);
+  const [logoError, setLogoError] = useState(false);
   const { searchQuery, setSearchQuery } = useSearch();
   const { currentTheme } = useTheme();
   const navigate = useNavigate();
@@ -44,7 +45,16 @@ export const Navbar: React.FC = () => {
       <div className="px-4 md:px-12 py-4 flex items-center justify-between">
         <div className="flex items-center gap-8">
           <Link to="/" className="flex items-center gap-2" onClick={clearSearch}>
-            <img src={logo} alt="CinemaCore" className="h-8 w-8" />
+            {!logoError ? (
+              <img 
+                src={logo} 
+                alt="CinemaCore" 
+                className="h-8 w-8" 
+                onError={() => setLogoError(true)}
+              />
+            ) : (
+              <Film className="h-8 w-8 text-primary" />
+            )}
             <span className="text-primary text-2xl font-bold hidden sm:block">CinemaCore</span>
             {currentTheme === 'christmas' && (
               <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-red-600/90 text-amber-200 uppercase tracking-wide">

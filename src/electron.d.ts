@@ -38,6 +38,7 @@ export interface IElectronAPI {
   };
   deleteFile: (filePath: string) => Promise<boolean>;
   openFileLocation: (filePath: string) => Promise<void>;
+  openExternal: (url: string) => Promise<void>;
   db: {
     getAllFiles(): Promise<any[]>;
     upsertFile(file: any): Promise<void>;

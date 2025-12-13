@@ -1,11 +1,16 @@
 import http from 'http';
+import https from 'https';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import Database from 'better-sqlite3';
+import { app } from 'electron';
+import selfsigned from 'selfsigned';
 
 const PORT = 17890;
+const HTTPS_PORT = 17891;
 let server: http.Server | null = null;
+let httpsServer: https.Server | null = null;
 let currentPairingCode: string = '';
 let pairingInterval: NodeJS.Timeout | null = null;
 
@@ -17,10 +22,10 @@ function isLanIp(ip: string | undefined): boolean {
   if (!ip) return false;
   if (ip === '::1') return true;
   if (ip === '127.0.0.1') return true;
-  
+
   // IPv6 ULA (fc00::/7) - starts with fc or fd
   if (/^f[cd][0-9a-f]{2}:/i.test(ip)) return true;
-  
+
   const cleanIp = ip.replace(/^::ffff:/, '');
   const parts = cleanIp.split('.').map(Number);
   if (parts.length !== 4) return false;
@@ -35,10 +40,82 @@ function isLanIp(ip: string | undefined): boolean {
   return false;
 }
 
+function getLocalIp(): string | null {
+  // keep require to avoid bundler issues in electron main
+  const { networkInterfaces } = require('os');
+  const nets = networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === 'IPv4' && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return null;
+}
+
+async function getOrGenerateCert(): Promise<{ cert: string; key: string }> {
+  const userDataPath = app.getPath('userData');
+  const certDir = path.join(userDataPath, 'certs');
+  const certPath = path.join(certDir, 'cinemacore.local.pem');
+  const keyPath = path.join(certDir, 'cinemacore.local-key.pem');
+
+  if (!fs.existsSync(certDir)) {
+    fs.mkdirSync(certDir, { recursive: true });
+  }
+
+  if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+    return {
+      cert: fs.readFileSync(certPath, 'utf8'),
+      key: fs.readFileSync(keyPath, 'utf8'),
+    };
+  }
+
+  console.log('[HomeServer] Generating self-signed certificate...');
+
+  const localIp = getLocalIp();
+  const altNames: any[] = [
+    { type: 2, value: 'localhost' },
+    { type: 7, ip: '127.0.0.1' },
+  ];
+
+  if (localIp) {
+    altNames.push({ type: 7, ip: localIp });
+  }
+
+  const attrs = [{ name: 'commonName', value: 'CinemaCore Local' }];
+
+  // IMPORTANT: support both sync and async selfsigned.generate() variants
+  const maybe = (selfsigned as any).generate(attrs, {
+    days: 3650,
+    algorithm: 'sha256',
+    extensions: [
+      {
+        name: 'subjectAltName',
+        altNames,
+      },
+    ],
+  });
+
+  const pems = typeof maybe?.then === 'function' ? await maybe : maybe;
+
+  const certPem: string | undefined = pems?.cert;
+  const keyPem: string | undefined = pems?.private || pems?.privateKey;
+
+  if (!certPem || !keyPem) {
+    throw new Error(
+      `[HomeServer] selfsigned.generate() returned invalid PEMs (cert=${typeof certPem}, key=${typeof keyPem}).`
+    );
+  }
+
+  fs.writeFileSync(certPath, certPem, { encoding: 'utf8' });
+  fs.writeFileSync(keyPath, keyPem, { encoding: 'utf8' });
+
+  return { cert: certPem, key: keyPem };
+}
+
 function generatePairingCode() {
   currentPairingCode = crypto.randomInt(1000, 9999).toString();
-  // In a real app, we would broadcast this or show it in UI
-  // console.log('[HomeServer] New Pairing Code:', currentPairingCode);
 }
 
 export interface DeviceToken {
@@ -51,18 +128,20 @@ export interface DeviceToken {
 
 export function getDeviceTokens(db: Database.Database): DeviceToken[] {
   try {
-    const row = db.prepare("SELECT value FROM settings WHERE key = 'remote_tokens'").get() as { value: string } | undefined;
+    const row = db
+      .prepare("SELECT value FROM settings WHERE key = 'remote_tokens'")
+      .get() as { value: string } | undefined;
     if (!row) return [];
     const parsed = JSON.parse(row.value);
     if (!Array.isArray(parsed)) return [];
-    
+
     // Migration: if array of strings, convert to objects
     if (parsed.length > 0 && typeof parsed[0] === 'string') {
       return parsed.map((t: string) => ({
         token: t,
         createdAt: new Date().toISOString(),
         lastSeenAt: new Date().toISOString(),
-        deviceName: 'Legacy Device'
+        deviceName: 'Legacy Device',
       }));
     }
     return parsed;
@@ -72,18 +151,21 @@ export function getDeviceTokens(db: Database.Database): DeviceToken[] {
 }
 
 function saveDeviceTokens(db: Database.Database, tokens: DeviceToken[]) {
-  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('remote_tokens', JSON.stringify(tokens));
+  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(
+    'remote_tokens',
+    JSON.stringify(tokens)
+  );
 }
 
 export function revokeDevice(db: Database.Database, tokenPrefix: string) {
   const tokens = getDeviceTokens(db);
-  const newTokens = tokens.filter(t => !t.token.startsWith(tokenPrefix));
+  const newTokens = tokens.filter((t) => !t.token.startsWith(tokenPrefix));
   saveDeviceTokens(db, newTokens);
 }
 
 export function renameDevice(db: Database.Database, tokenPrefix: string, newName: string) {
   const tokens = getDeviceTokens(db);
-  const device = tokens.find(t => t.token.startsWith(tokenPrefix));
+  const device = tokens.find((t) => t.token.startsWith(tokenPrefix));
   if (device) {
     device.deviceName = newName;
     saveDeviceTokens(db, tokens);
@@ -110,16 +192,11 @@ function isAllowedOrigin(origin?: string): boolean {
   }
 }
 
-export function startHomeServer(db: Database.Database) {
-  if (server) return;
-
-  generatePairingCode();
-  pairingInterval = setInterval(generatePairingCode, 60000);
-
-  server = http.createServer(async (req, res) => {
+const createRequestHandler =
+  (db: Database.Database) => async (req: http.IncomingMessage, res: http.ServerResponse) => {
     // CORS
     const origin = req.headers.origin;
-    
+
     if (isAllowedOrigin(origin)) {
       res.setHeader('Access-Control-Allow-Origin', origin!);
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -140,33 +217,49 @@ export function startHomeServer(db: Database.Database) {
       return;
     }
 
-    const url = new URL(req.url || '', `http://${req.headers.host}`);
+    // Handle protocol in URL construction
+    const protocol = (req.socket as any).encrypted ? 'https' : 'http';
+    const url = new URL(req.url || '', `${protocol}://${req.headers.host}`);
+
+    // Public: Root (for connectivity checks)
+    if (req.method === 'GET' && url.pathname === '/') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, name: 'CinemaCore Home Server' }));
+      return;
+    }
+
+    // Public: Health
+    if (req.method === 'GET' && url.pathname === '/health') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, status: 'healthy', time: new Date().toISOString() }));
+      return;
+    }
 
     // Public: Ping
     if (req.method === 'GET' && url.pathname === '/api/ping') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: true, server: "cinemacore", version: 1 }));
+      res.end(JSON.stringify({ ok: true, server: 'cinemacore', version: 1 }));
       return;
     }
 
     // Public: Pair
     if (req.method === 'POST' && url.pathname === '/api/pair') {
       let body = '';
-      req.on('data', chunk => body += chunk);
+      req.on('data', (chunk) => (body += chunk));
       req.on('end', () => {
         try {
           const data = JSON.parse(body);
           if (data.code === currentPairingCode) {
             const token = crypto.randomBytes(32).toString('base64url');
-            
+
             const newToken: DeviceToken = {
-                token,
-                createdAt: new Date().toISOString(),
-                lastSeenAt: new Date().toISOString(),
-                userAgent: req.headers['user-agent'],
-                deviceName: data.deviceName || 'Unknown Device'
+              token,
+              createdAt: new Date().toISOString(),
+              lastSeenAt: new Date().toISOString(),
+              userAgent: req.headers['user-agent'],
+              deviceName: data.deviceName || 'Unknown Device',
             };
-            
+
             const tokens = getDeviceTokens(db);
             tokens.push(newToken);
             saveDeviceTokens(db, tokens);
@@ -177,7 +270,7 @@ export function startHomeServer(db: Database.Database) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Invalid code' }));
           }
-        } catch (e) {
+        } catch {
           res.writeHead(400);
           res.end('Bad Request');
         }
@@ -201,8 +294,8 @@ export function startHomeServer(db: Database.Database) {
     }
 
     const tokens = getDeviceTokens(db);
-    const device = tokens.find(t => t.token === token);
-    
+    const device = tokens.find((t) => t.token === token);
+
     if (!device) {
       res.writeHead(403);
       res.end('Forbidden: Invalid Token');
@@ -215,57 +308,54 @@ export function startHomeServer(db: Database.Database) {
 
     // GET /api/devices
     if (req.method === 'GET' && url.pathname === '/api/devices') {
-        const safeList = tokens.map(t => ({
-            id: t.token.substring(0, 8),
-            createdAt: t.createdAt,
-            lastSeenAt: t.lastSeenAt,
-            userAgent: t.userAgent,
-            deviceName: t.deviceName
-        }));
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true, devices: safeList }));
-        return;
+      const safeList = tokens.map((t) => ({
+        id: t.token.substring(0, 8),
+        createdAt: t.createdAt,
+        lastSeenAt: t.lastSeenAt,
+        userAgent: t.userAgent,
+        deviceName: t.deviceName,
+      }));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, devices: safeList }));
+      return;
     }
 
     // POST /api/devices/revoke
     if (req.method === 'POST' && url.pathname === '/api/devices/revoke') {
-        let body = '';
-        req.on('data', chunk => body += chunk);
-        req.on('end', () => {
-            try {
-                const data = JSON.parse(body);
-                if (data.token) {
-                    // Allow revoking by full token (self-revoke) or prefix (if we supported it here, but let's stick to token for self)
-                    // Actually, if I am authenticated, I can revoke myself.
-                    // Or if I pass an ID?
-                    // The prompt says "POST /api/devices/revoke with { token }".
-                    // It implies revoking a specific token.
-                    revokeDevice(db, data.token);
-                    res.writeHead(200, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ ok: true }));
-                } else {
-                    res.writeHead(400);
-                    res.end('Missing token');
-                }
-            } catch {
-                res.writeHead(400);
-                res.end('Bad Request');
-            }
-        });
-        return;
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          if (data.token) {
+            revokeDevice(db, data.token);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true }));
+          } else {
+            res.writeHead(400);
+            res.end('Missing token');
+          }
+        } catch {
+          res.writeHead(400);
+          res.end('Bad Request');
+        }
+      });
+      return;
     }
 
     // POST /api/devices/revoke-all
     if (req.method === 'POST' && url.pathname === '/api/devices/revoke-all') {
-        revokeAllDevices(db);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true }));
-        return;
+      revokeAllDevices(db);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+      return;
     }
 
     if (req.method === 'GET' && url.pathname === '/api/library') {
       try {
-        const movies = db.prepare(`
+        const movies = db
+          .prepare(
+            `
           SELECT 
             id, 
             COALESCE(json_extract(metadata, '$.title'), guessedTitle, fileName) as title,
@@ -277,13 +367,18 @@ export function startHomeServer(db: Database.Database) {
           FROM movie_files
           WHERE isHidden = 0 AND (mediaType = 'movie' OR mediaType IS NULL)
           ORDER BY title ASC
-        `).all().map((m: any) => ({
-          ...m,
-          genres: m.genres ? JSON.parse(m.genres) : [],
-          cast: m.cast ? JSON.parse(m.cast) : []
-        }));
+        `
+          )
+          .all()
+          .map((m: any) => ({
+            ...m,
+            genres: m.genres ? JSON.parse(m.genres) : [],
+            cast: m.cast ? JSON.parse(m.cast) : [],
+          }));
 
-        const series = db.prepare(`
+        const series = db
+          .prepare(
+            `
           SELECT 
             MIN(id) as id,
             seriesTitle as title,
@@ -295,16 +390,19 @@ export function startHomeServer(db: Database.Database) {
           WHERE isHidden = 0 AND mediaType = 'episode' AND seriesTitle IS NOT NULL
           GROUP BY seriesTitle
           ORDER BY seriesTitle ASC
-        `).all().map((s: any) => ({
-          ...s,
-          genres: s.genres ? JSON.parse(s.genres) : [],
-          cast: s.cast ? JSON.parse(s.cast) : []
-        }));
+        `
+          )
+          .all()
+          .map((s: any) => ({
+            ...s,
+            genres: s.genres ? JSON.parse(s.genres) : [],
+            cast: s.cast ? JSON.parse(s.cast) : [],
+          }));
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ movies, series }));
       } catch (e) {
-        console.error("Library API error:", e);
+        console.error('Library API error:', e);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Internal Server Error' }));
       }
@@ -321,7 +419,9 @@ export function startHomeServer(db: Database.Database) {
       }
 
       try {
-        const episodes = db.prepare(`
+        const episodes = db
+          .prepare(
+            `
           SELECT 
             id,
             seasonNumber as season,
@@ -331,17 +431,22 @@ export function startHomeServer(db: Database.Database) {
           FROM movie_files
           WHERE isHidden = 0 AND mediaType = 'episode' AND seriesTitle = ?
           ORDER BY seasonNumber ASC, episodeNumber ASC
-        `).all(title);
+        `
+          )
+          .all(title);
 
-        // Get series poster from the first episode or aggregate
-        const seriesInfo = db.prepare(`
+        const seriesInfo = db
+          .prepare(
+            `
           SELECT 
             seriesTitle as title,
             MAX(COALESCE(tmdbPosterUrl, json_extract(metadata, '$.posterUrl'))) as poster
           FROM movie_files
           WHERE isHidden = 0 AND mediaType = 'episode' AND seriesTitle = ?
           GROUP BY seriesTitle
-        `).get(title);
+        `
+          )
+          .get(title);
 
         if (!seriesInfo) {
           res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -352,7 +457,7 @@ export function startHomeServer(db: Database.Database) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ...seriesInfo, episodes }));
       } catch (e) {
-        console.error("Series API error:", e);
+        console.error('Series API error:', e);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Internal Server Error' }));
       }
@@ -369,7 +474,9 @@ export function startHomeServer(db: Database.Database) {
       }
 
       try {
-        const row = db.prepare(`
+        const row = db
+          .prepare(
+            `
           SELECT 
             id,
             mediaType,
@@ -383,7 +490,9 @@ export function startHomeServer(db: Database.Database) {
             episodeNumber
           FROM movie_files
           WHERE id = ? AND isHidden = 0
-        `).get(id) as any;
+        `
+          )
+          .get(id) as any;
 
         if (!row) {
           res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -398,13 +507,13 @@ export function startHomeServer(db: Database.Database) {
 
         const item = {
           ...row,
-          metadata: parsedMetadata
+          metadata: parsedMetadata,
         };
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(item));
       } catch (e) {
-        console.error("Item API error:", e);
+        console.error('Item API error:', e);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Internal Server Error' }));
       }
@@ -421,14 +530,16 @@ export function startHomeServer(db: Database.Database) {
       }
 
       try {
-        const row = db.prepare("SELECT metadata, mediaType FROM movie_files WHERE id = ?").get(id) as any;
+        const row = db.prepare('SELECT metadata, mediaType FROM movie_files WHERE id = ?').get(id) as any;
         if (!row) {
           res.writeHead(404, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Item not found' }));
           return;
         }
 
-        const apiKeyRow = db.prepare("SELECT value FROM settings WHERE key = 'tmdbApiKey' OR key = 'TMDB_API_KEY'").get() as { value: string } | undefined;
+        const apiKeyRow = db
+          .prepare("SELECT value FROM settings WHERE key = 'tmdbApiKey' OR key = 'TMDB_API_KEY'")
+          .get() as { value: string } | undefined;
         const apiKey = apiKeyRow?.value;
 
         if (!apiKey) {
@@ -438,57 +549,58 @@ export function startHomeServer(db: Database.Database) {
         }
 
         let metadata: any = {};
-        try { metadata = JSON.parse(row.metadata); } catch {}
-        
+        try {
+          metadata = JSON.parse(row.metadata);
+        } catch {}
+
         const tmdbId = metadata.tmdbId || metadata.id || (metadata.tmdb && metadata.tmdb.id);
-        
+
         if (!tmdbId) {
-           res.writeHead(404, { 'Content-Type': 'application/json' });
-           res.end(JSON.stringify({ ok: false, error: 'NO_TMDB_ID' }));
-           return;
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'NO_TMDB_ID' }));
+          return;
         }
 
         if (row.mediaType === 'episode') {
-             res.writeHead(200, { 'Content-Type': 'application/json' });
-             res.end(JSON.stringify({ ok: false, error: 'EPISODES_NOT_SUPPORTED' }));
-             return;
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'EPISODES_NOT_SUPPORTED' }));
+          return;
         }
 
         const tmdbUrl = `https://api.themoviedb.org/3/movie/${tmdbId}/videos?api_key=${apiKey}`;
         const tmdbRes = await fetch(tmdbUrl);
-        
+
         if (!tmdbRes.ok) {
-             res.writeHead(tmdbRes.status, { 'Content-Type': 'application/json' });
-             res.end(JSON.stringify({ ok: false, error: 'TMDB_ERROR' }));
-             return;
+          res.writeHead(tmdbRes.status, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'TMDB_ERROR' }));
+          return;
         }
 
         const data = await tmdbRes.json();
         const results = data.results || [];
         const youtubeVideos = results.filter((v: any) => v.site === 'YouTube');
-        
+
         if (youtubeVideos.length === 0) {
-             res.writeHead(200, { 'Content-Type': 'application/json' });
-             res.end(JSON.stringify({ ok: false, error: 'NO_TRAILER' }));
-             return;
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'NO_TRAILER' }));
+          return;
         }
 
         const best = youtubeVideos.sort((a: any, b: any) => {
-            const typeScore = (v: any) => v.type === 'Trailer' ? 2 : (v.type === 'Teaser' ? 1 : 0);
-            const officialScore = (v: any) => v.official ? 1 : 0;
-            return (typeScore(b) * 10 + officialScore(b)) - (typeScore(a) * 10 + officialScore(a));
+          const typeScore = (v: any) => (v.type === 'Trailer' ? 2 : v.type === 'Teaser' ? 1 : 0);
+          const officialScore = (v: any) => (v.official ? 1 : 0);
+          return typeScore(b) * 10 + officialScore(b) - (typeScore(a) * 10 + officialScore(a));
         })[0];
 
         if (best) {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ ok: true, youtubeKey: best.key, name: best.name }));
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, youtubeKey: best.key, name: best.name }));
         } else {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ ok: false, error: 'NO_TRAILER' }));
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'NO_TRAILER' }));
         }
-
       } catch (e) {
-        console.error("Trailer API error:", e);
+        console.error('Trailer API error:', e);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Internal Server Error' }));
       }
@@ -505,7 +617,9 @@ export function startHomeServer(db: Database.Database) {
       }
 
       try {
-        const row = db.prepare("SELECT filePath FROM movie_files WHERE id = ? AND isHidden = 0").get(id) as { filePath: string } | undefined;
+        const row = db
+          .prepare('SELECT filePath FROM movie_files WHERE id = ? AND isHidden = 0')
+          .get(id) as { filePath: string } | undefined;
         if (!row || !row.filePath) {
           res.writeHead(404);
           res.end('Not Found');
@@ -530,10 +644,10 @@ export function startHomeServer(db: Database.Database) {
         if (ext === '.webm') contentType = 'video/webm';
 
         if (range) {
-          const parts = range.replace(/bytes=/, "").split("-");
+          const parts = range.replace(/bytes=/, '').split('-');
           const start = parseInt(parts[0], 10);
           const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-          const chunksize = (end - start) + 1;
+          const chunksize = end - start + 1;
           const file = fs.createReadStream(filePath, { start, end });
           const head = {
             'Content-Range': `bytes ${start}-${end}/${fileSize}`,
@@ -552,7 +666,7 @@ export function startHomeServer(db: Database.Database) {
           fs.createReadStream(filePath).pipe(res);
         }
       } catch (e) {
-        console.error("Stream error:", e);
+        console.error('Stream error:', e);
         res.writeHead(500);
         res.end('Internal Server Error');
       }
@@ -561,17 +675,46 @@ export function startHomeServer(db: Database.Database) {
 
     res.writeHead(404);
     res.end('Not Found');
+  };
+
+export function startHomeServer(db: Database.Database) {
+  if (server) return;
+
+  generatePairingCode();
+  pairingInterval = setInterval(generatePairingCode, 600000); // 10 Minuten
+
+  const handler = createRequestHandler(db);
+
+  // HTTP Server (sofort)
+  server = http.createServer(handler);
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`[HomeServer] HTTP listening on 0.0.0.0:${PORT}`);
   });
 
-  server.listen(PORT, '0.0.0.0', () => {
-    console.log(`[HomeServer] Listening on 0.0.0.0:${PORT}`);
-  });
+  // HTTPS Server (erst wenn Cert wirklich da ist)
+  (async () => {
+    try {
+      const { cert, key } = await getOrGenerateCert();
+      httpsServer = https.createServer({ cert, key }, handler);
+      httpsServer.listen(HTTPS_PORT, '0.0.0.0', () => {
+        console.log(`[HomeServer] HTTPS listening on 0.0.0.0:${HTTPS_PORT}`);
+      });
+    } catch (e) {
+      console.error('[HomeServer] Failed to start HTTPS server:', e);
+    }
+  })();
 }
 
 export function stopHomeServer() {
   if (pairingInterval) clearInterval(pairingInterval);
+  pairingInterval = null;
+
   if (server) {
     server.close();
     server = null;
+  }
+  if (httpsServer) {
+    httpsServer.close();
+    httpsServer = null;
   }
 }

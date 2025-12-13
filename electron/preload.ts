@@ -44,6 +44,7 @@ contextBridge.exposeInMainWorld('cinemacore', {
     return await ipcRenderer.invoke("cinemacore:deleteFile", filePath);
   },
   openFileLocation: (filePath: string) => ipcRenderer.invoke("cinemacore:openFileLocation", filePath),
+  openExternal: (url: string) => ipcRenderer.invoke("cinemacore:openExternal", url),
   db: {
     getAllFiles: () => ipcRenderer.invoke("cinemacore:db:getAllFiles"),
     upsertFile: (file: any) => ipcRenderer.invoke("cinemacore:db:upsertFile", file),

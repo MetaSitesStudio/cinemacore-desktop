@@ -481,6 +481,16 @@ ipcMain.handle("cinemacore:openFileLocation", async (_event, filePath: string) =
   }
 });
 
+ipcMain.handle("cinemacore:openExternal", async (_event, url: string) => {
+  console.log('[Main] cinemacore:openExternal called with:', url);
+  try {
+    await shell.openExternal(url);
+  } catch (e) {
+    console.error("Failed to open external URL:", e);
+    throw e;
+  }
+});
+
 ipcMain.handle("cinemacore:playWithCustomPlayer", async (_event, playerPath: string, filePath: string) => {
   try {
     const child = spawn(playerPath, [filePath], {

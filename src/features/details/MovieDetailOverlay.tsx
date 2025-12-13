@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Play, Check, Trash2, Edit2, Film } from 'lucide-react';
+import { X, Play, Check, Trash2, Edit2, Film, ExternalLink } from 'lucide-react';
 import { Movie, MovieFile } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { useServices } from '@/services/ServiceContext';
@@ -299,15 +299,31 @@ export const MovieDetailOverlay: React.FC<MovieDetailOverlayProps> = ({ movie, o
       {/* Trailer Modal */}
       {showTrailer && trailerKey && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-4 animate-in fade-in duration-200">
-          <div className="relative w-full max-w-5xl aspect-video bg-black rounded-xl overflow-hidden shadow-2xl">
-            <button 
-              onClick={() => setShowTrailer(false)}
-              className="absolute top-4 right-4 z-10 p-2 bg-black/50 hover:bg-black/80 text-white rounded-full transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
+          <div className="relative w-full max-w-5xl aspect-video bg-black rounded-xl overflow-hidden shadow-2xl group">
+            <div className="absolute top-4 right-4 z-10 flex gap-2">
+              <button 
+                onClick={() => {
+                  if (window.cinemacore) {
+                    window.cinemacore.openExternal(`https://www.youtube.com/watch?v=${trailerKey}`);
+                  } else {
+                    window.open(`https://www.youtube.com/watch?v=${trailerKey}`, '_blank');
+                  }
+                }}
+                className="p-2 bg-black/50 hover:bg-black/80 text-white rounded-full transition-colors flex items-center gap-2 px-4"
+                title="Open in Browser"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span className="text-sm font-medium">Open in Browser</span>
+              </button>
+              <button 
+                onClick={() => setShowTrailer(false)}
+                className="p-2 bg-black/50 hover:bg-black/80 text-white rounded-full transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
             <iframe 
-              src={`https://www.youtube.com/embed/${trailerKey}?playsinline=1&rel=0&modestbranding=1`}
+              src={`https://www.youtube-nocookie.com/embed/${trailerKey}?playsinline=1&rel=0&modestbranding=1`}
               className="w-full h-full"
               allowFullScreen
               title="Trailer"

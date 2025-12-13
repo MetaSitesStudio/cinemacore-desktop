@@ -105,9 +105,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, onClick, onDelete, 
 
         {/* Content - Bottom */}
         <div className="absolute bottom-0 left-0 right-0 p-4 transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
-          <h3 className="text-white font-bold text-lg leading-tight line-clamp-2 mb-1 drop-shadow-md">
-            {movie.title}
-          </h3>
+          {/* Title removed as it is already on the poster */}
           <div className="flex items-center justify-between text-sm text-gray-300 font-medium">
             <span className="bg-white/10 px-2 py-0.5 rounded text-xs backdrop-blur-sm">
               {movie.year}
