@@ -111,6 +111,7 @@ export interface Series {
   seasons: number;
   genres: string[];
   isWatched?: boolean;
+  fullPath?: string;
 }
 
 export interface Genre {

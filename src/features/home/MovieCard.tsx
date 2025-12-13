@@ -52,6 +52,22 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, onClick, onDelete, 
     }
   };
 
+  const handleOpenFileLocation = async () => {
+    console.log('[MovieCard] handleOpenFileLocation', movie.fullPath);
+    if (movie.fullPath && window.cinemacore) {
+      await window.cinemacore.openFileLocation(movie.fullPath);
+    } else {
+      console.warn('[MovieCard] Cannot open file location: fullPath is missing or cinemacore API unavailable', { fullPath: movie.fullPath, cinemacore: !!window.cinemacore });
+    }
+  };
+
+  const handleDeleteFromDb = async () => {
+    if (window.cinemacore && confirm(`Are you sure you want to remove "${movie.title}" from the database? The file will remain on disk.`)) {
+      await window.cinemacore.library.removeFile(movie.id);
+      onUpdate?.();
+    }
+  };
+
   return (
     <div 
       className="relative group cursor-pointer w-full"
@@ -76,9 +92,11 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, onClick, onDelete, 
           <CardContextMenu 
             onPlayDefault={handlePlayDefault}
             onPlayCustom={handlePlayCustom}
+            onOpenFileLocation={handleOpenFileLocation}
             onToggleFavorite={handleToggleFavorite}
             onToggleHidden={handleToggleHidden}
-            onDelete={() => onDelete?.(movie)}
+            onDeleteFromDb={handleDeleteFromDb}
+            onMoveToTrash={() => onDelete?.(movie)}
             onEdit={onEdit ? () => onEdit(movie) : undefined}
             isFavorite={movie.isFavorite}
             isHidden={movie.isHidden}

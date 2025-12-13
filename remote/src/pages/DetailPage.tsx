@@ -25,6 +25,7 @@ export const DetailPage: React.FC = () => {
   const [showTrailer, setShowTrailer] = useState(false);
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
   const [trailerError, setTrailerError] = useState<string | null>(null);
+  const [loadingTrailer, setLoadingTrailer] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -50,6 +51,17 @@ export const DetailPage: React.FC = () => {
     return ['mp4', 'm4v', 'mov', 'webm'].includes(ext || '');
   }, [item?.fileName]);
 
+  const hasTmdbId = React.useMemo(() => {
+    if (!item?.metadata) return false;
+    const m = item.metadata;
+    if (m.tmdbId) return true;
+    if (m.tmdb && m.tmdb.id) return true;
+    // Check for numeric id that looks like TMDB (not starting with tt)
+    if (m.id && typeof m.id === 'number') return true;
+    if (m.id && typeof m.id === 'string' && !m.id.startsWith('tt') && /^\d+$/.test(m.id)) return true;
+    return false;
+  }, [item?.metadata]);
+
   const handleVlcOpen = () => {
     if (!item) return;
     const token = localStorage.getItem('cinemacore_token');
@@ -60,6 +72,7 @@ export const DetailPage: React.FC = () => {
   const handleWatchTrailer = async () => {
     if (!item) return;
     setTrailerError(null);
+    setLoadingTrailer(true);
     try {
       const res = await authFetch(`/api/trailer/${item.id}`);
       const data = await res.json();
@@ -73,6 +86,9 @@ export const DetailPage: React.FC = () => {
     } catch (e) {
       console.error(e);
       setTrailerError("Error loading trailer");
+      setTimeout(() => setTrailerError(null), 3000);
+    } finally {
+      setLoadingTrailer(false);
     }
   };
 
@@ -166,12 +182,14 @@ export const DetailPage: React.FC = () => {
 
                 <button 
                   onClick={handleWatchTrailer}
-                  className="flex items-center justify-center gap-2 bg-red-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-red-700 transition-colors mt-2"
+                  disabled={!hasTmdbId || loadingTrailer}
+                  title={!hasTmdbId ? "Trailer requires TMDB metadata" : "Watch Trailer"}
+                  className={`flex items-center justify-center gap-2 bg-red-600 text-white font-bold py-3 px-6 rounded-lg transition-colors mt-2 ${(!hasTmdbId || loadingTrailer) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-700'}`}
                 >
                   <Film size={20} />
-                  Watch Trailer
+                  {loadingTrailer ? "Loading..." : "Watch Trailer"}
                 </button>
-                {trailerError && <p className="text-xs text-center text-red-500">{trailerError}</p>}
+                {trailerError && <p className="text-xs text-center text-red-500 animate-pulse">{trailerError}</p>}
                 
                 <a 
                   href={`https://www.youtube.com/results?search_query=${encodeURIComponent(item.title + " trailer")}`}

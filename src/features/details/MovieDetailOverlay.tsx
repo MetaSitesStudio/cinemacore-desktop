@@ -34,13 +34,31 @@ export const MovieDetailOverlay: React.FC<MovieDetailOverlayProps> = ({ movie, o
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
   const [trailerError, setTrailerError] = useState<string | null>(null);
   const [loadingTrailer, setLoadingTrailer] = useState(false);
+  const [currentFile, setCurrentFile] = useState<MovieFile | null>(null);
 
   useEffect(() => {
     setTmdbBackdropFailed(false);
     setShowFallback(false);
     setTrailerKey(null);
     setTrailerError(null);
+    setCurrentFile(null);
+
+    if (movie?.id) {
+      getFile().then(f => setCurrentFile(f ?? null));
+    }
   }, [movie?.id]);
+
+  const hasTmdbId = React.useMemo(() => {
+    if (!currentFile?.metadata) return false;
+    const m = currentFile.metadata as any;
+    
+    if (m.tmdbId) return true;
+    if (m.tmdb && m.tmdb.id) return true;
+    if (m.id && typeof m.id === 'number') return true;
+    if (m.id && typeof m.id === 'string' && !m.id.startsWith('tt') && /^\d+$/.test(m.id)) return true;
+    
+    return false;
+  }, [currentFile]);
 
   if (!movie) return null;
 
@@ -191,7 +209,8 @@ export const MovieDetailOverlay: React.FC<MovieDetailOverlayProps> = ({ movie, o
                   variant="secondary" 
                   className="gap-2" 
                   onClick={handleWatchTrailer}
-                  disabled={loadingTrailer}
+                  disabled={loadingTrailer || !hasTmdbId}
+                  title={!hasTmdbId ? "Trailer requires TMDB metadata" : "Watch Trailer"}
                 >
                   <Film className="w-5 h-5" /> 
                   {loadingTrailer ? "Loading..." : "Trailer"}

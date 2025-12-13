@@ -21,6 +21,10 @@ export interface IElectronAPI {
     saveSetting: (key: string, value: string) => Promise<void>;
     getSetting: (key: string) => Promise<string | null>;
     getPairingCode: () => Promise<string>;
+    getDevices: () => Promise<{ id: string; createdAt: string; lastSeenAt: string; userAgent?: string; deviceName?: string }[]>;
+    revokeDevice: (id: string) => Promise<void>;
+    renameDevice: (id: string, name: string) => Promise<void>;
+    revokeAllDevices: () => Promise<void>;
   };
   library: {
     getFolders: () => Promise<LibraryFolder[]>;
@@ -33,6 +37,7 @@ export interface IElectronAPI {
     searchMedia: (payload: SearchMediaRequest) => Promise<MediaSearchResult[]>;
   };
   deleteFile: (filePath: string) => Promise<boolean>;
+  openFileLocation: (filePath: string) => Promise<void>;
   db: {
     getAllFiles(): Promise<any[]>;
     upsertFile(file: any): Promise<void>;

@@ -8,7 +8,12 @@ import { parseMovieFilename } from '../src/utils/filenameParser';
 import { ScanJob, MovieFile, PlaybackSettings, LibraryFolder, DuplicateGroup } from '../src/types';
 import { fetchTmdbArtworkForImdbId } from './services/tmdbArtworkService';
 import { fetchTmdbMetadata } from './services/tmdbMetadataService';
-import { startHomeServer, stopHomeServer, getCurrentPairingCode } from './homeServer';
+import { startHomeServer, stopHomeServer, getCurrentPairingCode, getDeviceTokens, revokeDevice, revokeAllDevices, renameDevice } from './homeServer';
+
+// Set App User Model ID for Windows Taskbar
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.cinemacore.desktop');
+}
 
 const isPro = true;
 
@@ -463,6 +468,16 @@ ipcMain.handle("cinemacore:playWithSystemDefaultPlayer", async (_event, filePath
   if (result) {
     console.error("Failed to open system default player:", result);
     throw new Error(result);
+  }
+});
+
+ipcMain.handle("cinemacore:openFileLocation", async (_event, filePath: string) => {
+  console.log('[Main] cinemacore:openFileLocation called with:', filePath);
+  try {
+    shell.showItemInFolder(filePath);
+  } catch (e) {
+    console.error("Failed to open file location:", e);
+    throw e;
   }
 });
 
@@ -1010,6 +1025,33 @@ ipcMain.handle("cinemacore:getPairingCode", () => {
   return getCurrentPairingCode();
 });
 
+ipcMain.handle("cinemacore:devices:list", () => {
+  if (!db) return [];
+  const tokens = getDeviceTokens(db);
+  return tokens.map(t => ({
+    id: t.token.substring(0, 8),
+    createdAt: t.createdAt,
+    lastSeenAt: t.lastSeenAt,
+    userAgent: t.userAgent,
+    deviceName: t.deviceName
+  }));
+});
+
+ipcMain.handle("cinemacore:devices:revoke", (_event, id: string) => {
+  if (!db) return;
+  revokeDevice(db, id);
+});
+
+ipcMain.handle("cinemacore:devices:rename", (_event, id: string, name: string) => {
+  if (!db) return;
+  renameDevice(db, id, name);
+});
+
+ipcMain.handle("cinemacore:devices:revokeAll", () => {
+  if (!db) return;
+  revokeAllDevices(db);
+});
+
 ipcMain.handle("cinemacore:library:searchMedia", async (_, payload: any) => {
   if (!db) throw new Error("Database not initialized");
   
@@ -1089,10 +1131,14 @@ ipcMain.handle("cinemacore:library:removeFile", (_event, fileId: string) => {
 });
 
 const createWindow = () => {
+  const iconPath = path.join(__dirname, 'assets/icons/icon-192.png');
+  console.log('Icon path:', iconPath);
+  
   // Create the browser window.
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
+    icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,

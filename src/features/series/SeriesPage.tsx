@@ -108,7 +108,8 @@ export const SeriesPage: React.FC = () => {
         rating: parseFloat(metaFile.metadata?.rating || '0') || 0,
         seasons: new Set(files.map(f => f.seasonNumber).filter(Boolean)).size,
         genres: metaFile.metadata?.genres || [],
-        isWatched: false
+        isWatched: false,
+        fullPath: files[0]?.fullPath
       };
     });
   }, [episodeFiles, searchQuery, filters]);

@@ -24,6 +24,10 @@ contextBridge.exposeInMainWorld('cinemacore', {
     saveSetting: (key: string, value: string) => ipcRenderer.invoke("cinemacore:saveSetting", key, value),
     getSetting: (key: string) => ipcRenderer.invoke("cinemacore:getSetting", key),
     getPairingCode: () => ipcRenderer.invoke("cinemacore:getPairingCode"),
+    getDevices: () => ipcRenderer.invoke("cinemacore:devices:list"),
+    revokeDevice: (id: string) => ipcRenderer.invoke("cinemacore:devices:revoke", id),
+    renameDevice: (id: string, name: string) => ipcRenderer.invoke("cinemacore:devices:rename", id, name),
+    revokeAllDevices: () => ipcRenderer.invoke("cinemacore:devices:revokeAll"),
   },
   library: {
     getFolders: () => ipcRenderer.invoke("cinemacore:library:getFolders"),
@@ -39,6 +43,7 @@ contextBridge.exposeInMainWorld('cinemacore', {
   deleteFile: async (filePath: string): Promise<boolean> => {
     return await ipcRenderer.invoke("cinemacore:deleteFile", filePath);
   },
+  openFileLocation: (filePath: string) => ipcRenderer.invoke("cinemacore:openFileLocation", filePath),
   db: {
     getAllFiles: () => ipcRenderer.invoke("cinemacore:db:getAllFiles"),
     upsertFile: (file: any) => ipcRenderer.invoke("cinemacore:db:upsertFile", file),

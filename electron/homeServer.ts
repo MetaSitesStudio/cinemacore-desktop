@@ -41,22 +41,57 @@ function generatePairingCode() {
   // console.log('[HomeServer] New Pairing Code:', currentPairingCode);
 }
 
-function getTokens(db: Database.Database): string[] {
+export interface DeviceToken {
+  token: string;
+  createdAt: string;
+  lastSeenAt: string;
+  userAgent?: string;
+  deviceName?: string;
+}
+
+export function getDeviceTokens(db: Database.Database): DeviceToken[] {
   try {
     const row = db.prepare("SELECT value FROM settings WHERE key = 'remote_tokens'").get() as { value: string } | undefined;
     if (!row) return [];
-    return JSON.parse(row.value);
+    const parsed = JSON.parse(row.value);
+    if (!Array.isArray(parsed)) return [];
+    
+    // Migration: if array of strings, convert to objects
+    if (parsed.length > 0 && typeof parsed[0] === 'string') {
+      return parsed.map((t: string) => ({
+        token: t,
+        createdAt: new Date().toISOString(),
+        lastSeenAt: new Date().toISOString(),
+        deviceName: 'Legacy Device'
+      }));
+    }
+    return parsed;
   } catch {
     return [];
   }
 }
 
-function saveToken(db: Database.Database, token: string) {
-  const tokens = getTokens(db);
-  if (!tokens.includes(token)) {
-    tokens.push(token);
-    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('remote_tokens', JSON.stringify(tokens));
+function saveDeviceTokens(db: Database.Database, tokens: DeviceToken[]) {
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('remote_tokens', JSON.stringify(tokens));
+}
+
+export function revokeDevice(db: Database.Database, tokenPrefix: string) {
+  const tokens = getDeviceTokens(db);
+  const newTokens = tokens.filter(t => !t.token.startsWith(tokenPrefix));
+  saveDeviceTokens(db, newTokens);
+}
+
+export function renameDevice(db: Database.Database, tokenPrefix: string, newName: string) {
+  const tokens = getDeviceTokens(db);
+  const device = tokens.find(t => t.token.startsWith(tokenPrefix));
+  if (device) {
+    device.deviceName = newName;
+    saveDeviceTokens(db, tokens);
   }
+}
+
+export function revokeAllDevices(db: Database.Database) {
+  saveDeviceTokens(db, []);
 }
 
 function isAllowedOrigin(origin?: string): boolean {
@@ -123,7 +158,19 @@ export function startHomeServer(db: Database.Database) {
           const data = JSON.parse(body);
           if (data.code === currentPairingCode) {
             const token = crypto.randomBytes(32).toString('base64url');
-            saveToken(db, token);
+            
+            const newToken: DeviceToken = {
+                token,
+                createdAt: new Date().toISOString(),
+                lastSeenAt: new Date().toISOString(),
+                userAgent: req.headers['user-agent'],
+                deviceName: data.deviceName || 'Unknown Device'
+            };
+            
+            const tokens = getDeviceTokens(db);
+            tokens.push(newToken);
+            saveDeviceTokens(db, tokens);
+
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ token }));
           } else {
@@ -153,11 +200,67 @@ export function startHomeServer(db: Database.Database) {
       return;
     }
 
-    const tokens = getTokens(db);
-    if (!tokens.includes(token)) {
+    const tokens = getDeviceTokens(db);
+    const device = tokens.find(t => t.token === token);
+    
+    if (!device) {
       res.writeHead(403);
       res.end('Forbidden: Invalid Token');
       return;
+    }
+
+    // Update lastSeenAt
+    device.lastSeenAt = new Date().toISOString();
+    saveDeviceTokens(db, tokens);
+
+    // GET /api/devices
+    if (req.method === 'GET' && url.pathname === '/api/devices') {
+        const safeList = tokens.map(t => ({
+            id: t.token.substring(0, 8),
+            createdAt: t.createdAt,
+            lastSeenAt: t.lastSeenAt,
+            userAgent: t.userAgent,
+            deviceName: t.deviceName
+        }));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, devices: safeList }));
+        return;
+    }
+
+    // POST /api/devices/revoke
+    if (req.method === 'POST' && url.pathname === '/api/devices/revoke') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body);
+                if (data.token) {
+                    // Allow revoking by full token (self-revoke) or prefix (if we supported it here, but let's stick to token for self)
+                    // Actually, if I am authenticated, I can revoke myself.
+                    // Or if I pass an ID?
+                    // The prompt says "POST /api/devices/revoke with { token }".
+                    // It implies revoking a specific token.
+                    revokeDevice(db, data.token);
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: true }));
+                } else {
+                    res.writeHead(400);
+                    res.end('Missing token');
+                }
+            } catch {
+                res.writeHead(400);
+                res.end('Bad Request');
+            }
+        });
+        return;
+    }
+
+    // POST /api/devices/revoke-all
+    if (req.method === 'POST' && url.pathname === '/api/devices/revoke-all') {
+        revokeAllDevices(db);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+        return;
     }
 
     if (req.method === 'GET' && url.pathname === '/api/library') {

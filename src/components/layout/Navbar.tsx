@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { Search, Bell, User, X } from 'lucide-react';
-import logo from '@/assets/logo.svg';
+import logo from '@/assets/logo.png';
 import { useSearch } from '@/context/SearchContext';
 import { useTheme } from '@/context/ThemeContext';
 

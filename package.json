@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "dev:electron": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && npm run compile:electron && electron .\"",
-    "compile:electron": "tsc -p electron/tsconfig.json && node -e \"require('fs').writeFileSync('dist-electron/package.json', '{\\\"type\\\": \\\"commonjs\\\"}')\"",
+    "compile:electron": "tsc -p electron/tsconfig.json && node -e \"require('fs').writeFileSync('dist-electron/package.json', '{\\\"type\\\": \\\"commonjs\\\"}'); const fs=require('fs'); if(fs.existsSync('electron/assets')) fs.cpSync('electron/assets', 'dist-electron/electron/assets', {recursive: true});\"",
     "rebuild": "electron-builder install-app-deps",
     "build": "tsc && vite build && npm run compile:electron",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
@@ -39,5 +39,25 @@
     "typescript": "^5.2.2",
     "vite": "^5.1.6",
     "wait-on": "^9.0.3"
+  },
+  "build": {
+    "appId": "com.cinemacore.desktop",
+    "productName": "CinemaCore",
+    "directories": {
+      "output": "dist-build"
+    },
+    "files": [
+      "dist-electron/**/*",
+      "dist/**/*"
+    ],
+    "win": {
+      "icon": "electron/assets/icons/icon-512.png",
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

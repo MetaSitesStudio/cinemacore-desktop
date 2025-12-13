@@ -1,6 +1,6 @@
 import React from 'react';
 import { Series } from '@/types';
-import { Trash2, Edit2 } from 'lucide-react';
+import { CardContextMenu } from '@/components/ui/CardContextMenu';
 
 interface SeriesCardProps {
   series: Series;
@@ -16,6 +16,12 @@ export const SeriesCard: React.FC<SeriesCardProps> = ({ series, onClick, onDelet
     : series.posterUrl
       ? series.posterUrl
       : '/placeholder-poster.png';
+
+  const handleOpenFileLocation = async () => {
+    if (series.fullPath && window.cinemacore) {
+      await window.cinemacore.openFileLocation(series.fullPath);
+    }
+  };
 
   return (
     <div 
@@ -39,25 +45,12 @@ export const SeriesCard: React.FC<SeriesCardProps> = ({ series, onClick, onDelet
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-300" />
         
         {/* Action Buttons - Top Right */}
-        <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
-          {onEdit && (
-            <button 
-              onClick={(e) => { e.stopPropagation(); onEdit(series); }}
-              className="p-2 bg-black/60 backdrop-blur-md rounded-full text-white/90 hover:text-primary hover:bg-black/80 transition-colors border border-white/10"
-              title="Edit Metadata"
-            >
-              <Edit2 className="w-4 h-4" />
-            </button>
-          )}
-          {onDelete && (
-            <button 
-              onClick={(e) => { e.stopPropagation(); onDelete(series); }}
-              className="p-2 bg-black/60 backdrop-blur-md rounded-full text-white/90 hover:text-red-500 hover:bg-black/80 transition-colors border border-white/10"
-              title="Delete"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
+        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0 z-10">
+          <CardContextMenu 
+            onEdit={onEdit ? () => onEdit(series) : undefined}
+            onMoveToTrash={onDelete ? () => onDelete(series) : undefined}
+            onOpenFileLocation={handleOpenFileLocation}
+          />
         </div>
       </div>
     </div>

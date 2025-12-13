@@ -1,4 +1,3 @@
-import React from "react";
 
 export const ChristmasSnowOverlay = ({ active }: { active: boolean }) => {
   if (!active) return null;

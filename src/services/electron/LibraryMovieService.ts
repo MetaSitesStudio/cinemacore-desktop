@@ -33,7 +33,10 @@ export class LibraryMovieService implements IMovieService {
         cast: f.metadata?.cast || [],
         // @ts-ignore
         director: f.metadata?.crew?.find((c: any) => c.job === 'Director')?.name,
-        isWatched: false // Not tracked yet
+        isWatched: false, // Not tracked yet
+        fullPath: f.fullPath,
+        isFavorite: f.isFavorite,
+        isHidden: f.isHidden
       }));
   }
 
