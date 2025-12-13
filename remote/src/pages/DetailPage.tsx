@@ -295,7 +295,7 @@ export const DetailPage: React.FC = () => {
               <X size={24} />
             </button>
             <iframe 
-              src={`https://www.youtube.com/embed/${trailerKey}?playsinline=1&rel=0&modestbranding=1`}
+              src={`https://www.youtube-nocookie.com/embed/${trailerKey}?playsinline=1&rel=0&modestbranding=1`}
               className="w-full h-full"
               allowFullScreen
               title="Trailer"
